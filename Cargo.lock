@@ -786,6 +786,7 @@ name = "polars-random"
 version = "0.1.0"
 dependencies = [
  "polars",
+ "psm",
  "pyo3",
  "pyo3-polars",
  "rand",
