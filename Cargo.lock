@@ -783,13 +783,15 @@ dependencies = [
 
 [[package]]
 name = "polars-random"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "polars",
  "psm",
  "pyo3",
  "pyo3-polars",
  "rand",
+ "rand_distr",
+ "serde",
 ]
 
 [[package]]

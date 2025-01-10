@@ -15,18 +15,31 @@ class Random:
     def __init__(self, expr: pl.Expr) -> None:
         self._expr = expr
 
-    def rand(self) -> pl.Expr:
+    def rand(
+        self,
+        seed: int | None = None,
+    ) -> pl.Expr:
+        if seed is not None:
+            if seed < 0:
+                raise ValueError("Seed must be a non-negative integer")
         return register_plugin_function(
             args=[self._expr],
             plugin_path=LIB,
             function_name="rand",
             is_elementwise=True,
+            kwargs={"seed": seed},
         )
 
-    def normal(self) -> pl.Expr:
+    def normal(
+        self,
+        mean: float | None = 0.0,
+        std: float | None = 1.0,
+        seed: float | None = None,
+    ) -> pl.Expr:
         return register_plugin_function(
             args=[self._expr],
             plugin_path=LIB,
             function_name="normal",
             is_elementwise=True,
+            kwargs={"mean": mean, "std": std, "seed": seed},
         )
