@@ -1,6 +1,6 @@
 [package]
 name = "polars-random"
-version = "0.1.0"
+version = "0.1.4"
 description = "Polars plugin for generating random distributions"
 edition = "2021"
 license = "MIT"
