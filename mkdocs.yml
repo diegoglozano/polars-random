@@ -1,0 +1,34 @@
+site_name: polars-random
+site_description: polars-random docs
+site_url: https://diegoglozano.github.io/polars-random/
+
+theme:
+  name: material
+  locale: en
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - scheme: slate
+      primary: green
+      accent: blue
+      toggle:
+        icon: material/lightbulb-outline
+        name: Switch to dark mode
+    - scheme: default
+      primary: green
+      accent: blue
+      toggle:
+        icon: material/lightbulb
+        name: Switch to light mode
+  features:
+    - search.suggest
+    - search.highlight
+repo_name: diegoglozano/polars-random
+repo_url: https://github.com/diegoglozano/polars-random
+
+nav:
+  - Home: index.md
+
+plugins:
+  - mkdocstrings
+  - search
