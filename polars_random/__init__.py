@@ -5,13 +5,9 @@ from pathlib import Path
 import polars as pl
 from polars.plugins import register_plugin_function
 
-from polars_random._internal import __version__ as VERSION
-
-__version__ = VERSION
+from polars_random._internal import __version__ as __version__
 
 LIB = Path(__file__).parent
-
-__all__ = ["sum_as_string"]
 
 
 @pl.api.register_expr_namespace("random")

@@ -12,7 +12,9 @@ license = { file = "LICENSE" }
 readme = "README.md"
 dynamic = ["version"]
 requires-python = ">=3.9"
-dependencies = []
+dependencies = [
+    "polars>=1.19.0",
+]
 
 [dependency-groups]
 dev = [
@@ -28,7 +30,7 @@ dev = [
 ]
 
 [tool.maturin]
-module-name = "polars_random._polars_random"
+module-name = "polars_random._internal"
 binding = "pyo3"
 features = ["pyo3/extension-module"]
 
