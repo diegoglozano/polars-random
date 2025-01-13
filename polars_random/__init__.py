@@ -28,6 +28,23 @@ def _check_seed(seed: int | None) -> None:
         if seed < 0:
             raise ValueError("Seed must be a non-negative integer")
 
+def _check_probability(prob: float) -> None:
+    """
+    Check if a probability is between 0 and 1.
+
+    Parameters
+    ----------
+    prob : float
+        The probability value to check.
+
+    Raises
+    ------
+    ValueError
+        If the probability is below 0 or above 1.
+    """
+    if prob < 0 or prob > 1:
+        raise ValueError("Probability must be between 0 and 1")
+
 
 @pl.api.register_expr_namespace("random")
 class Random:
@@ -45,6 +62,8 @@ class Random:
 
     def rand(
         self,
+        low: float | None = None,
+        high: float | None = None,
         seed: int | None = None,
     ) -> pl.Expr:
         """
@@ -81,7 +100,11 @@ class Random:
             plugin_path=LIB,
             function_name="rand",
             is_elementwise=True,
-            kwargs={"seed": seed},
+            kwargs={
+                "low": low,
+                "high": high,
+                "seed": seed,
+            },
         )
 
     def normal(
@@ -170,6 +193,7 @@ class Random:
         └─────┴────────────┘
         """
         _check_seed(seed)
+        _check_probability(p)
         return register_plugin_function(
             args=[self._expr],
             plugin_path=LIB,
