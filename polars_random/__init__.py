@@ -63,7 +63,7 @@ class Random:
         Examples
         --------
         >>> df = pl.DataFrame({"a": [1, 2, 3]})
-        >>> df.with_column(pl.col("a").random.rand(seed=42).alias("random"))
+        >>> df.with_columns(pl.col("a").random.rand(seed=42).alias("random"))
         shape: (3, 2)
         ┌─────┬────────────┐
         │ a   │ random     │
@@ -110,7 +110,7 @@ class Random:
         Examples
         --------
         >>> df = pl.DataFrame({"a": [1, 2, 3]})
-        >>> df.with_column(pl.col("a").random.normal(mean=0, std=1, seed=42).alias("normal"))
+        >>> df.with_columns(pl.col("a").random.normal(mean=0, std=1, seed=42).alias("normal"))
         shape: (3, 2)
         ┌─────┬────────────┐
         │ a   │ normal     │
@@ -157,7 +157,7 @@ class Random:
         Examples
         --------
         >>> df = pl.DataFrame({"a": [1, 2, 3]})
-        >>> df.with_column(pl.col("a").random.binomial(n=10, p=0.5, seed=42).alias("binomial"))
+        >>> df.with_columns(pl.col("a").random.binomial(n=10, p=0.5, seed=42).alias("binomial"))
         shape: (3, 2)
         ┌─────┬────────────┐
         │ a   │ binomial   │

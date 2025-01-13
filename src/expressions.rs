@@ -40,12 +40,28 @@ fn rand(inputs: &[Series], kwargs: RandArgs) -> PolarsResult<Series> {
 #[polars_expr(output_type=Float64)]
 fn normal(inputs: &[Series], kwargs: NormalArgs) -> PolarsResult<Series> {
     let ca = inputs[0].f64()?;
+    let count = ca.len();
+    let mut out = Vec::with_capacity(count);
+    
+    let mut rng = match kwargs.seed {
+        Some(i) => SmallRng::seed_from_u64(i),
+        None => SmallRng::from_entropy(),
+    };
+    let mean = kwargs.mean.unwrap_or(0.0);
+    let std = kwargs.std.unwrap_or(1.0);
+    let normal: Normal<f64> = Normal::new(mean, std).unwrap();
+
+    (0..count).map(|_| normal.sample(&mut *rng)).collect();
+
     let out = ca
         .apply(|opt_v: Option<f64>| opt_v.map(|_v: f64| {
             let mean = kwargs.mean.unwrap_or(0.0);
             let std = kwargs.std.unwrap_or(1.0);
-            let mut rng = rand::thread_rng();
             let normal: Normal<f64> = Normal::new(mean, std).unwrap();
+            let mut rng = match kwargs.seed {
+                Some(i) => SmallRng::seed_from_u64(i),
+                None => SmallRng::from_entropy(),
+            };
             normal.sample(&mut rng)
         }
     ));
@@ -59,7 +75,7 @@ fn binomial(inputs: &[Series], kwargs: BinomialArgs) -> PolarsResult<Series> {
     let out = ca
         .apply(|opt_v: Option<f64>| opt_v.map(|_v: f64| {
             let mut rng = rand::thread_rng();
-            let binom = rand_distr::Binomial::new(kwargs.n, kwargs.p).unwrap();
+            let binom = Binomial::new(kwargs.n, kwargs.p).unwrap();
             binom.sample(&mut rng) as f64
         }
     ));

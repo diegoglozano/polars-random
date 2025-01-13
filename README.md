@@ -38,11 +38,11 @@ df = pl.DataFrame({
 
 random_series = (
     df
-    .select([
+    .select(
         pl
         .col("values")
         .random.rand(seed=42)
-    ])
+    )
 )
 
 print(random_series)
