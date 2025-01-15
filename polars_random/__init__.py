@@ -271,7 +271,6 @@ class Random:
         │ 3   │ 7          │
         └─────┴────────────┘
         """
-        print(type(n), type(p))
         _check_seed(seed)
         if (
             (isinstance(n, (pl.Expr, str)) and not isinstance(p, (pl.Expr, str)))
