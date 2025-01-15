@@ -52,8 +52,8 @@ class Random:
 
     Parameters
     ----------
-    expr : pl.Expr
-        The expression to apply the random functions on.
+    df : pl.DataFrame
+        The dataframe to apply the random functions on.
     """
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -167,24 +167,46 @@ class Random:
         └─────┴────────────┘
         """
         _check_seed(seed)
-        return (
-            self
-            ._df
-            .with_columns(
-                pl.lit(.0).alias(self._temp_name),
-            )
-            .with_columns(
-                register_plugin_function(
-                    args=pl.col("__temp__"),
-                    plugin_path=LIB,
-                    function_name="normal",
-                    is_elementwise=True,
-                    kwargs={"mean": mean, "std": std, "seed": seed},
+        if (
+            (isinstance(mean, (pl.Expr, str)) and not isinstance(std, (pl.Expr, str)))
+            or (isinstance(std, (pl.Expr, str)) and not isinstance(mean, (pl.Expr, str)))
+        ):
+            raise Exception("Both mean and std must be either expressions/str or floats (a mix is not allowed!)")
+
+        if isinstance(mean, (pl.Expr, str)) and isinstance(std, (pl.Expr, str)):
+            return (
+                self
+                ._df
+                .with_columns(
+                    register_plugin_function(
+                        args=[mean, std],
+                        plugin_path=LIB,
+                        function_name="normal_expr",
+                        is_elementwise=True,
+                        kwargs={"seed": seed},
+                    )
+                    .alias(name or "normal")
                 )
-                .alias(name or "normal")
             )
-            .drop(self._temp_name)
-        )
+        else:
+            return (
+                self
+                ._df
+                .with_columns(
+                    pl.lit(.0).alias(self._temp_name),
+                )
+                .with_columns(
+                    register_plugin_function(
+                        args=pl.col("__temp__"),
+                        plugin_path=LIB,
+                        function_name="normal",
+                        is_elementwise=True,
+                        kwargs={"mean": mean, "std": std, "seed": seed},
+                    )
+                    .alias(name or "normal")
+                )
+                .drop(self._temp_name)
+            )
 
     def binomial(
         self,
@@ -209,7 +231,7 @@ class Random:
 
         Returns
         -------
-        pl.Expr
+        pl.DataFrame
             The expression with the binomial distribution random number generator applied.
 
         Examples

@@ -68,6 +68,27 @@ fn normal(inputs: &[Series], kwargs: NormalArgs) -> PolarsResult<Series> {
     Ok(Float64Chunked::from_vec(ca.name().clone(), out).into_series())
 }
 
+#[polars_expr(output_type=Float64)]
+fn normal_expr(inputs: &[Series], kwargs: NormalArgs) -> PolarsResult<Series> {
+    let mean = inputs[0].f64()?;
+    let std = inputs[1].f64()?;
+    let count = mean.len();
+    let mut out: Vec<f64> = Vec::with_capacity(count);
+    
+    let mut rng = match kwargs.seed {
+        Some(i) => SmallRng::seed_from_u64(i),
+        None => SmallRng::from_entropy(),
+    };
+
+    let iter = mean.into_iter().zip(std.into_iter());
+    for (mean_, std_) in iter {
+        let normal: Normal<f64> = Normal::new(mean_.unwrap(), std_.unwrap()).unwrap();
+        out.push(normal.sample(&mut rng));
+    }
+
+    Ok(Float64Chunked::from_vec(mean.name().clone(), out).into_series())
+}
+
 
 #[polars_expr(output_type=UInt64)]
 fn binomial(inputs: &[Series], kwargs: BinomialArgs) -> PolarsResult<Series> {
