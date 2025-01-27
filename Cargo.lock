@@ -783,7 +783,7 @@ dependencies = [
 
 [[package]]
 name = "polars-random"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "polars",
  "psm",
