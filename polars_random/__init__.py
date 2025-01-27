@@ -16,7 +16,7 @@ def _check_seed(seed: int | None) -> None:
 
     Parameters
     ----------
-    seed : int | None
+    seed : int or None
         The seed value to check.
 
     Raises
@@ -48,7 +48,7 @@ def _check_probability(prob: float) -> None:
 @pl.api.register_dataframe_namespace("random")
 class Random:
     """
-    Namespace for random expression functions.
+    Namespace for generating new columns in the dataframe containing statistical distributions.
 
     Parameters
     ----------
@@ -68,18 +68,18 @@ class Random:
         name: str | None = None,
     ) -> pl.DataFrame:
         """
-        Generate a random number expression.
+        Generate a random number column.
 
         Parameters
         ----------
-        low : float | None, optional
-            Lower boundary for uniform distribution
-        high : float | None, optional
-            Higher boundary for uniform distribution
-        seed : int | None, optional
+        low : float or None, optional
+            Lower boundary for uniform distribution.
+        high : float or None, optional
+            Higher boundary for uniform distribution.
+        seed : int or None, optional
             The seed value for the random number generator, by default None.
-        name: str | None, optional
-            Name for the generated column. Default value: "rand"
+        name : str or None, optional
+            Name for the generated column. Default value: "rand".
 
         Returns
         -------
@@ -159,14 +159,14 @@ class Random:
 
         Parameters
         ----------
-        mean : float | None, optional
+        mean : float or None, optional
             The mean of the normal distribution, by default 0.0.
-        std : float | None, optional
+        std : float or None, optional
             The standard deviation of the normal distribution, by default 1.0.
-        seed : float | None, optional
+        seed : float or None, optional
             The seed value for the random number generator, by default None.
-        name: str | None, optional
-            Name for the generated column. Default value: "normal"
+        name : str or None, optional
+            Name for the generated column. Default value: "normal".
 
         Returns
         -------
@@ -246,10 +246,10 @@ class Random:
             The number of trials.
         p : float
             The probability of success.
-        seed : int | None, optional
+        seed : int or None, optional
             The seed value for the random number generator, by default None.
-        name: str | None, optional
-            Name for the generated column. Default value: "binomial"
+        name : str or None, optional
+            Name for the generated column. Default value: "binomial".
 
         Returns
         -------

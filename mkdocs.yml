@@ -9,13 +9,13 @@ theme:
     repo: fontawesome/brands/github
   palette:
     - scheme: slate
-      primary: green
+      primary: blue
       accent: blue
       toggle:
         icon: material/lightbulb-outline
         name: Switch to dark mode
     - scheme: default
-      primary: green
+      primary: blue
       accent: blue
       toggle:
         icon: material/lightbulb
@@ -27,8 +27,14 @@ repo_name: diegoglozano/polars-random
 repo_url: https://github.com/diegoglozano/polars-random
 
 nav:
-  - Home: index.md
+  - Intro: index.md
+  - Docs:
+      - API Reference: api_reference.md
 
 plugins:
-  - mkdocstrings
   - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
