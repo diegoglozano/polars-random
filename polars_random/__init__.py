@@ -28,6 +28,7 @@ def _check_seed(seed: int | None) -> None:
         if seed < 0:
             raise ValueError("Seed must be a non-negative integer")
 
+
 def _check_probability(prob: float) -> None:
     """
     Check if a probability is between 0 and 1.
@@ -44,6 +45,7 @@ def _check_probability(prob: float) -> None:
     """
     if prob < 0 or prob > 1:
         raise ValueError("Probability must be between 0 and 1")
+
 
 @pl.api.register_dataframe_namespace("random")
 class Random:
@@ -102,33 +104,36 @@ class Random:
         └─────┴────────────┘
         """
         _check_seed(seed)
-        if (
-            (isinstance(low, (pl.Expr, str)) and not isinstance(high, (pl.Expr, str)))
-            or (isinstance(high, (pl.Expr, str)) and not isinstance(low, (pl.Expr, str)))
+        if (isinstance(low, (pl.Expr, str)) and not isinstance(high, (pl.Expr, str))) or (
+            isinstance(high, (pl.Expr, str)) and not isinstance(low, (pl.Expr, str))
         ):
-            raise Exception("Both low and high must be either expressions/str or floats (a mix is not allowed!)")
+            raise Exception(
+                "Both low and high must be either expressions/str or floats (a mix is not allowed!)"
+            )
+
+        if isinstance(low, pl.Expr):
+            low = low.cast(pl.Float64)
+        if isinstance(high, pl.Expr):
+            high = high.cast(pl.Float64)
+        if isinstance(low, str):
+            low = pl.col(low).cast(pl.Float64)
+        if isinstance(high, str):
+            high = pl.col(high).cast(pl.Float64)
 
         if isinstance(low, (pl.Expr, str)) and isinstance(high, (pl.Expr, str)):
-            return (
-                self
-                ._df
-                .with_columns(
-                    register_plugin_function(
-                        args=[low, high],
-                        plugin_path=LIB,
-                        function_name="rand_expr",
-                        is_elementwise=True,
-                        kwargs={"seed": seed},
-                    )
-                    .alias(name or "rand")
-                )
+            return self._df.with_columns(
+                register_plugin_function(
+                    args=[low, high],
+                    plugin_path=LIB,
+                    function_name="rand_expr",
+                    is_elementwise=True,
+                    kwargs={"seed": seed},
+                ).alias(name or "rand")
             )
         else:
             return (
-                self
-                ._df
-                .with_columns(
-                    pl.lit(.0).alias(self._temp_name),
+                self._df.with_columns(
+                    pl.lit(0.0).alias(self._temp_name),
                 )
                 .with_columns(
                     register_plugin_function(
@@ -141,11 +146,12 @@ class Random:
                             "high": high,
                             "seed": seed,
                         },
-                    )
-                    .alias(name or "rand")
+                    ).alias(name or "rand")
                 )
                 .drop(self._temp_name)
             )
+
+    uniform = rand
 
     def normal(
         self,
@@ -189,33 +195,36 @@ class Random:
         └─────┴────────────┘
         """
         _check_seed(seed)
-        if (
-            (isinstance(mean, (pl.Expr, str)) and not isinstance(std, (pl.Expr, str)))
-            or (isinstance(std, (pl.Expr, str)) and not isinstance(mean, (pl.Expr, str)))
+        if (isinstance(mean, (pl.Expr, str)) and not isinstance(std, (pl.Expr, str))) or (
+            isinstance(std, (pl.Expr, str)) and not isinstance(mean, (pl.Expr, str))
         ):
-            raise Exception("Both mean and std must be either expressions/str or floats (a mix is not allowed!)")
+            raise Exception(
+                "Both mean and std must be either expressions/str or floats (a mix is not allowed!)"
+            )
+
+        if isinstance(mean, pl.Expr):
+            mean = mean.cast(pl.Float64)
+        if isinstance(std, pl.Expr):
+            std = std.cast(pl.Float64)
+        if isinstance(mean, str):
+            mean = pl.col(mean).cast(pl.Float64)
+        if isinstance(std, str):
+            std = pl.col(std).cast(pl.Float64)
 
         if isinstance(mean, (pl.Expr, str)) and isinstance(std, (pl.Expr, str)):
-            return (
-                self
-                ._df
-                .with_columns(
-                    register_plugin_function(
-                        args=[mean, std],
-                        plugin_path=LIB,
-                        function_name="normal_expr",
-                        is_elementwise=True,
-                        kwargs={"seed": seed},
-                    )
-                    .alias(name or "normal")
-                )
+            return self._df.with_columns(
+                register_plugin_function(
+                    args=[mean, std],
+                    plugin_path=LIB,
+                    function_name="normal_expr",
+                    is_elementwise=True,
+                    kwargs={"seed": seed},
+                ).alias(name or "normal")
             )
         else:
             return (
-                self
-                ._df
-                .with_columns(
-                    pl.lit(.0).alias(self._temp_name),
+                self._df.with_columns(
+                    pl.lit(0.0).alias(self._temp_name),
                 )
                 .with_columns(
                     register_plugin_function(
@@ -224,8 +233,7 @@ class Random:
                         function_name="normal",
                         is_elementwise=True,
                         kwargs={"mean": mean, "std": std, "seed": seed},
-                    )
-                    .alias(name or "normal")
+                    ).alias(name or "normal")
                 )
                 .drop(self._temp_name)
             )
@@ -236,7 +244,7 @@ class Random:
         p: pl.Expr | float,
         seed: int | None = None,
         name: str | None = None,
-    ) -> pl.Expr:
+    ) -> pl.DataFrame:
         """
         Generate a binomial distribution random number expression.
 
@@ -272,35 +280,38 @@ class Random:
         └─────┴────────────┘
         """
         _check_seed(seed)
-        if (
-            (isinstance(n, (pl.Expr, str)) and not isinstance(p, (pl.Expr, str)))
-            or (isinstance(p, (pl.Expr, str)) and not isinstance(n, (pl.Expr, str)))
+        if (isinstance(n, (pl.Expr, str)) and not isinstance(p, (pl.Expr, str))) or (
+            isinstance(p, (pl.Expr, str)) and not isinstance(n, (pl.Expr, str))
         ):
-            raise Exception("Both n and p must be either expressions/str or floats (a mix is not allowed!)")
-        if isinstance(p, float):    
+            raise Exception(
+                "Both n and p must be either expressions/str or floats (a mix is not allowed!)"
+            )
+        if isinstance(p, (float, int)):
             _check_probability(p)
 
+        if isinstance(n, pl.Expr):
+            n = n.cast(pl.UInt64)
+        if isinstance(n, str):
+            n = pl.col(n).cast(pl.UInt64)
+        if isinstance(p, pl.Expr):
+            p = p.cast(pl.Float64)
+        if isinstance(p, str):
+            p = pl.col(p).cast(pl.Float64)
+
         if isinstance(n, (pl.Expr, str)) and isinstance(p, (pl.Expr, str)):
-            return (
-                self
-                ._df
-                .with_columns(
-                    register_plugin_function(
-                        args=[n, p],
-                        plugin_path=LIB,
-                        function_name="binomial_expr",
-                        is_elementwise=True,
-                        kwargs={"seed": seed},
-                    )
-                    .alias(name or "binomial")
-                )
+            return self._df.with_columns(
+                register_plugin_function(
+                    args=[n, p],
+                    plugin_path=LIB,
+                    function_name="binomial_expr",
+                    is_elementwise=True,
+                    kwargs={"seed": seed},
+                ).alias(name or "binomial")
             )
         else:
             return (
-                self
-                ._df
-                .with_columns(
-                    pl.lit(.0).alias(self._temp_name),
+                self._df.with_columns(
+                    pl.lit(0.0).alias(self._temp_name),
                 )
                 .with_columns(
                     register_plugin_function(
@@ -309,8 +320,7 @@ class Random:
                         function_name="binomial",
                         is_elementwise=True,
                         kwargs={"n": n, "p": p, "seed": seed},
-                    )
-                    .alias(name or "binomial")
+                    ).alias(name or "binomial")
                 )
                 .drop(self._temp_name)
             )

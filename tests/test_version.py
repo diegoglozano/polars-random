@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from polars_random._version import VERSION
+from polars_random import __version__ as VERSION
 
 if sys.version_info < (3, 11):
     import tomli as tomllib

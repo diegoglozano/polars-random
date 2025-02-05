@@ -2,8 +2,8 @@
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
 use rand::prelude::*;
-use serde::Deserialize;
 use rand_distr::{Binomial, Distribution, Normal, Uniform};
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct RandArgs {
@@ -28,7 +28,7 @@ struct BinomialArgs {
 
 #[derive(Deserialize)]
 struct SeedArgs {
-    seed: Option<u64>
+    seed: Option<u64>,
 }
 
 #[polars_expr(output_type=Float64)]
@@ -36,15 +36,12 @@ fn rand(inputs: &[Series], kwargs: RandArgs) -> PolarsResult<Series> {
     let ca = inputs[0].f64()?;
     let count = ca.len();
     let mut out: Vec<f64> = Vec::with_capacity(count);
-    
+
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
         None => SmallRng::from_entropy(),
     };
-    let uniform: Uniform<f64> = Uniform::new(
-        kwargs.low.unwrap_or(0.0),
-        kwargs.high.unwrap_or(1.0),
-    );
+    let uniform: Uniform<f64> = Uniform::new(kwargs.low.unwrap_or(0.0), kwargs.high.unwrap_or(1.0));
 
     for _ in 0..count {
         out.push(uniform.sample(&mut rng));
@@ -58,7 +55,7 @@ fn rand_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
     let high = inputs[1].f64()?;
     let count = low.len();
     let mut out: Vec<f64> = Vec::with_capacity(count);
-    
+
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
         None => SmallRng::from_entropy(),
@@ -66,10 +63,7 @@ fn rand_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
 
     let iter = low.into_iter().zip(high.into_iter());
     for (low_, high_) in iter {
-        let uniform: Uniform<f64> = Uniform::new(
-            low_.unwrap(),
-            high_.unwrap(),
-        );
+        let uniform: Uniform<f64> = Uniform::new(low_.unwrap(), high_.unwrap());
         out.push(uniform.sample(&mut rng));
     }
 
@@ -81,7 +75,7 @@ fn normal(inputs: &[Series], kwargs: NormalArgs) -> PolarsResult<Series> {
     let ca = inputs[0].f64()?;
     let count = ca.len();
     let mut out: Vec<f64> = Vec::with_capacity(count);
-    
+
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
         None => SmallRng::from_entropy(),
@@ -102,7 +96,7 @@ fn normal_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
     let std = inputs[1].f64()?;
     let count = mean.len();
     let mut out: Vec<f64> = Vec::with_capacity(count);
-    
+
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
         None => SmallRng::from_entropy(),
@@ -117,13 +111,12 @@ fn normal_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
     Ok(Float64Chunked::from_vec(mean.name().clone(), out).into_series())
 }
 
-
 #[polars_expr(output_type=UInt64)]
 fn binomial(inputs: &[Series], kwargs: BinomialArgs) -> PolarsResult<Series> {
     let ca = inputs[0].f64()?;
     let count = ca.len();
     let mut out: Vec<u64> = Vec::with_capacity(count);
-    
+
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
         None => SmallRng::from_entropy(),
@@ -144,7 +137,7 @@ fn binomial_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
     let p = inputs[1].f64()?;
     let count = n.len();
     let mut out: Vec<u64> = Vec::with_capacity(count);
-    
+
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
         None => SmallRng::from_entropy(),
