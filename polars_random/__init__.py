@@ -48,6 +48,7 @@ def _check_probability(prob: float) -> None:
 
 
 @pl.api.register_dataframe_namespace("random")
+@pl.api.register_lazyframe_namespace("random")
 class Random:
     """
     Namespace for generating new columns in the dataframe containing statistical distributions.
