@@ -1,30 +1,30 @@
 import polars as pl
+import pytest
 
 import polars_random  # noqa
 
 
-def test_normal():
-    df = pl.DataFrame(
+@pytest.mark.parametrize(
+    ("func_name", "params", "target"),
+    [
+        ("normal", dict(mean=0.0, std=1.0), 0.0),
+        ("rand", dict(low=0.0, high=1.0), 0.5),
+        ("binomial", dict(n=10, p=0.5), 5.0),
+    ],
+)
+def test_all(func_name: str, params: dict[str, float], target: float) -> None:
+    # Initialize the dataframe
+    df: pl.DataFrame | pl.LazyFrame = pl.DataFrame(
         {
             "a": range(1_000_000),
         }
-    ).random.normal(mean=0.0, std=1.0)  # type: ignore
-    assert abs(df.select(pl.col("normal").mean()).item() - 0.0) < 0.01
+    )
 
+    # Add the random column
+    df = getattr(df.random, func_name)(**params, name="rand")  # type: ignore
 
-def test_uniform():
-    df = pl.DataFrame(
-        {
-            "a": range(1_000_000),
-        }
-    ).random.rand(low=0.0, high=1.0)  # type: ignore
-    assert abs(df.select(pl.col("rand").mean()).item() - 0.5) < 0.01
+    # Calculate the mean
+    df_mean = df.select(pl.col("rand").mean())
+    mean = df_mean.item()
 
-
-def test_binomial():
-    df = pl.DataFrame(
-        {
-            "a": range(1_000_000),
-        }
-    ).random.binomial(n=10, p=0.5)  # type: ignore
-    assert abs(df.select(pl.col("binomial").mean()).item() - 5) < 0.01
+    assert abs(mean - target) < 0.01
