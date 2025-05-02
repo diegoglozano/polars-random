@@ -16,6 +16,8 @@ import polars_random  # noqa
     ("lazy", "streaming"),
     [
         (False, False),
+        (True, False),
+        (True, True),
     ],
 )
 def test_all(
