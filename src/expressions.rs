@@ -39,9 +39,10 @@ fn rand(inputs: &[Series], kwargs: RandArgs) -> PolarsResult<Series> {
 
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
-        None => SmallRng::from_entropy(),
+        None => SmallRng::from_os_rng(),
     };
-    let uniform: Uniform<f64> = Uniform::new(kwargs.low.unwrap_or(0.0), kwargs.high.unwrap_or(1.0));
+    let uniform: Uniform<f64> = Uniform::new(kwargs.low.unwrap_or(0.0), kwargs.high.unwrap_or(1.0))
+        .map_err(|e| PolarsError::ComputeError(format!("invalid uniform range: {e}").into()))?;
 
     for _ in 0..count {
         out.push(uniform.sample(&mut rng));
@@ -58,12 +59,13 @@ fn rand_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
 
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
-        None => SmallRng::from_entropy(),
+        None => SmallRng::from_os_rng(),
     };
 
     let iter = low.into_iter().zip(high.into_iter());
     for (low_, high_) in iter {
-        let uniform: Uniform<f64> = Uniform::new(low_.unwrap(), high_.unwrap());
+        let uniform: Uniform<f64> = Uniform::new(low_.unwrap(), high_.unwrap())
+            .map_err(|e| PolarsError::ComputeError(format!("invalid uniform range: {e}").into()))?;
         out.push(uniform.sample(&mut rng));
     }
 
@@ -78,7 +80,7 @@ fn normal(inputs: &[Series], kwargs: NormalArgs) -> PolarsResult<Series> {
 
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
-        None => SmallRng::from_entropy(),
+        None => SmallRng::from_os_rng(),
     };
     let mean = kwargs.mean.unwrap_or(0.0);
     let std = kwargs.std.unwrap_or(1.0);
@@ -99,7 +101,7 @@ fn normal_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
 
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
-        None => SmallRng::from_entropy(),
+        None => SmallRng::from_os_rng(),
     };
 
     let iter = mean.into_iter().zip(std.into_iter());
@@ -119,7 +121,7 @@ fn binomial(inputs: &[Series], kwargs: BinomialArgs) -> PolarsResult<Series> {
 
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
-        None => SmallRng::from_entropy(),
+        None => SmallRng::from_os_rng(),
     };
     let n = kwargs.n;
     let p = kwargs.p;
@@ -140,7 +142,7 @@ fn binomial_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
 
     let mut rng = match kwargs.seed {
         Some(i) => SmallRng::seed_from_u64(i),
-        None => SmallRng::from_entropy(),
+        None => SmallRng::from_os_rng(),
     };
 
     let iter = n.into_iter().zip(p.into_iter());
