@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "polars-random"
-description = "Polars plugin for generating random distributions"
+description = "Generate random numbers and statistical distributions natively in Polars DataFrames"
 authors = [
   { name = "Diego Garcia Lozano", email = "diegoglozano96@gmail.com" },
 ]
@@ -15,6 +15,46 @@ requires-python = ">=3.9"
 dependencies = [
     "polars>=1.0.0",
 ]
+keywords = [
+    "polars",
+    "polars-plugin",
+    "random",
+    "random-numbers",
+    "random-distribution",
+    "statistics",
+    "dataframe",
+    "uniform",
+    "normal",
+    "binomial",
+    "numpy",
+    "rust",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://diegoglozano.github.io/polars-random/"
+Documentation = "https://diegoglozano.github.io/polars-random/"
+Repository = "https://github.com/diegoglozano/polars-random"
+Issues = "https://github.com/diegoglozano/polars-random/issues"
+Changelog = "https://github.com/diegoglozano/polars-random/releases"
 
 [dependency-groups]
 dev = [
