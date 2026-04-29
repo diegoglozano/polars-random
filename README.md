@@ -19,10 +19,10 @@ uv add polars-random
 ```sh
 poetry add polars-random
 ```
+
 ```sh
 pip install polars-random
 ```
-
 
 ## Usage
 
@@ -51,14 +51,15 @@ If we want to generate a new uniform column called `rand` based on some paramete
 )
 ```
 
-We can also add a `seed` and make the generation reproducible. In the following case, we are using default parameters (`low=1.` and `high=1.`) and generating a uniform distribution called `rand_seed`:
+We can also add a `seed` and make the generation reproducible. In the following case, we are using default parameters (`low=0.` and `high=1.`) and generating a uniform distribution called `rand_seed`:
 ```python
 (
     df
     .random.rand(
-        seed=42, 
+        seed=42,
         name="rand_seed",
     )
+)
 ```
 
 If we want custom parameters, we can use `polars expressions`. Let's say we have two columns called `custom_low` and `custom_high`. For generating a new column, we can use either the expression `pl.col("custom_low")` or a python string `"custom_low"`:
@@ -82,6 +83,8 @@ If we want custom parameters, we can use `polars expressions`. Let's say we have
 
 ### Uniform distribution
 
+`random.uniform` is provided as an alias for `random.rand`.
+
 ```python
 import polars as pl
 import polars_random
@@ -98,8 +101,8 @@ random_series = (
         name="rand_expr",
     )
     .random.rand(
-        mean="custom_low",
-        std="custom_high",
+        low="custom_low",
+        high="custom_high",
         name="rand_str",
     )
 )
