@@ -56,8 +56,8 @@ jobs:
       run: uv run ruff format polars_random tests --check
     - name: Lint with ruff
       run: uv run ruff check .
-    - name: mypy check
-      run: uv run mypy polars_random tests
+    - name: ty check
+      run: uv run ty check polars_random tests
   testing:
     strategy:
       fail-fast: false
