@@ -81,6 +81,9 @@ disallow_untyped_defs = true
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 disallow_untyped_defs = false
+# polars namespaces are registered at import time; mypy can't see them.
+# Test code also relies on polars's Series-vs-Expr return types; allow those too.
+disable_error_code = ["attr-defined", "operator", "union-attr"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

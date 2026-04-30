@@ -1,4 +1,57 @@
-## `pl.DataFrame.random`
+# API reference
+
+`polars-random` exposes the same set of distributions through four interchangeable entry points. Pick whichever fits your pipeline; the underlying Rust kernel is the same.
+
+## Top-level functions
+
+Returns a `pl.Expr` by default, or a `pl.Series` of length `size` when `size=` is given.
+
+::: polars_random.rand
+    handler: python
+
+::: polars_random.uniform
+    handler: python
+
+::: polars_random.normal
+    handler: python
+
+::: polars_random.binomial
+    handler: python
+
+::: polars_random.randint
+    handler: python
+
+## `pl.col(...).random` — expression namespace
+
+Use inside any expression context (`select`, `with_columns`, lazy queries, group-by aggregations, …). The parent expression provides the row count.
+
+```python
+import polars as pl
+import polars_random  # registers the namespace
+
+df.with_columns(noise=pl.col("id").random.normal(mean=0, std=1, seed=42))
+```
+
+Available methods: `rand` / `uniform`, `normal`, `binomial`, `randint`. Same parameters as the top-level functions, minus `size`.
+
+## `df.random` — DataFrame namespace
 
 ::: polars_random.Random
     handler: python
+
+## `lf.random` — LazyFrame namespace
+
+Same API as `df.random` but returns a `pl.LazyFrame`. Lets the random draws stay inside a lazy plan and be optimized alongside the rest of your query.
+
+```python
+(
+    df.lazy()
+      .filter(pl.col("active"))
+      .random.normal(seed=42, name="noise")
+      .collect()
+)
+```
+
+## Null handling
+
+When a parameter is supplied as a column or expression, any null in that column is propagated to the output as `null` instead of raising. Scalar parameters are validated up front (`seed >= 0`, `0 <= p <= 1`, valid distribution params) and raise `ValueError` / `PolarsError` if invalid.

@@ -8,28 +8,35 @@
 
 **Generate random numbers and statistical distributions natively in [Polars](https://pola.rs/) DataFrames** — a NumPy-style random API exposed as first-class Polars expressions, with reproducible seeds and per-row parameters.
 
-`polars-random` is a Rust plugin that registers a `.random` namespace on `pl.DataFrame`. Use it to add columns of uniform, normal, or binomial draws — with parameters that can be Python literals, column names, or arbitrary Polars expressions.
+`polars-random` is a Rust plugin offering four equivalent entry points so it composes naturally with the rest of polars:
+
+| Use case                                           | API                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------ |
+| "Add a column of random draws to a DataFrame"      | `df.random.<dist>(...)`                                            |
+| Same thing, lazy                                   | `lf.random.<dist>(...)`                                            |
+| Inside any expression / `with_columns` / `select`  | `pl.col("x").random.<dist>(...)` &nbsp;or&nbsp; `polars_random.<dist>(...)` |
+| Just give me N values as a Series                  | `polars_random.<dist>(..., size=N)`                                |
 
 ```python
 import polars as pl
-import polars_random  # registers df.random
+import polars_random as pr  # registers DataFrame/LazyFrame/Expr namespaces
 
+# 1. eager Series
+pr.normal(mean=0.0, std=1.0, size=5, seed=42)
+
+# 2. as a polars expression in any context
 df = pl.DataFrame({"id": range(5)})
+df.with_columns(noise=pr.normal(mean=0.0, std=1.0, seed=42))
+df.with_columns(noise=pl.col("id").random.normal(seed=42))
 
+# 3. as a DataFrame method (returns a new DataFrame with the column appended)
 df.random.normal(mean=0.0, std=1.0, seed=42, name="noise")
-# shape: (5, 2)
-# ┌─────┬───────────┐
-# │ id  ┆ noise     │
-# │ --- ┆ ---       │
-# │ i64 ┆ f64       │
-# ╞═════╪═══════════╡
-# │ 0   ┆  0.49671… │
-# │ 1   ┆ -0.13826… │
-# │ 2   ┆  0.64769… │
-# │ 3   ┆  1.52303… │
-# │ 4   ┆ -0.23415… │
-# └─────┴───────────┘
+
+# 4. inside a lazy pipeline
+df.lazy().random.normal(seed=42, name="noise").collect()
 ```
+
+Available distributions: `rand` / `uniform`, `normal`, `binomial`, `randint`. Every parameter (`low`, `high`, `mean`, `std`, `n`, `p`) accepts a Python scalar, a column name (`"my_col"`), or any `pl.Expr`. Nulls in column-valued parameters propagate as null in the output (no panic).
 
 ## Why polars-random?
 
@@ -68,15 +75,16 @@ df.random.<distribution>(<params>, seed=None, name=None)
 
 ## Coming from NumPy?
 
-| NumPy                                    | polars-random                                            |
-| ---------------------------------------- | -------------------------------------------------------- |
-| `np.random.uniform(low, high, size=n)`   | `df.random.rand(low=low, high=high)`                     |
-| `np.random.normal(mean, std, size=n)`    | `df.random.normal(mean=mean, std=std)`                   |
-| `np.random.binomial(n, p, size=size)`    | `df.random.binomial(n=n, p=p)`                           |
-| `np.random.seed(42)` (global)            | `seed=42` per call                                       |
-| Different params per row (loop / vectorize manually) | Pass a column name or `pl.col(...)` as the parameter |
+| NumPy                                    | polars-random                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------- |
+| `np.random.uniform(low, high, size=n)`   | `pr.rand(low=low, high=high, size=n)` &nbsp;or&nbsp; `df.random.rand(low=low, high=high)` |
+| `np.random.normal(mean, std, size=n)`    | `pr.normal(mean=mean, std=std, size=n)`                             |
+| `np.random.binomial(n, p, size=size)`    | `pr.binomial(n=n, p=p, size=size)`                                  |
+| `np.random.randint(low, high, size=n)`   | `pr.randint(low=low, high=high, size=n)`                            |
+| `np.random.seed(42)` (global)            | `seed=42` per call                                                  |
+| Different params per row (loop / vectorize manually) | Pass a column name or `pl.col(...)` as the parameter      |
 
-The output length always matches the DataFrame's height — no `size=` argument needed.
+When used as a DataFrame/LazyFrame method or via the `pl.col(...).random` namespace, the output length is taken from the parent — no `size=` needed. Use `size=N` only with the top-level functions for "give me N values without a frame."
 
 ## Distributions
 
@@ -163,6 +171,43 @@ df = pl.DataFrame({
     .random.binomial(n="n", p="p", seed=42, name="binomial_str")
 )
 ```
+
+### `df.random.randint`
+
+Uniform random integers in `[low, high)` (high is exclusive, matching `numpy.random.randint`).
+
+| Parameter | Type                          | Default      | Description                  |
+| --------- | ----------------------------- | ------------ | ---------------------------- |
+| `low`     | `int`, `str`, or `pl.Expr`    | `0`          | Lower bound (inclusive).     |
+| `high`    | `int`, `str`, or `pl.Expr`    | `2`          | Upper bound (exclusive).     |
+| `seed`    | `int` or `None`               | `None`       | Reproducible draws.          |
+| `name`    | `str` or `None`               | `"randint"`  | Output column name.          |
+
+```python
+df.random.randint(low=0, high=10, seed=42)            # one column, scalar bounds
+df.random.randint(low="lo", high="hi", seed=42)       # per-row bounds via columns
+```
+
+## Beyond `df.random` — same kernel, four entry points
+
+```python
+import polars as pl
+import polars_random as pr
+
+# 1. Top-level: returns a Series of N random values (NumPy-style).
+pr.normal(mean=0, std=1, size=1_000, seed=42)
+
+# 2. Top-level inside any expression (length comes from the surrounding context).
+df.with_columns(noise=pr.normal(mean=0, std=1, seed=42))
+
+# 3. Expression namespace — anchor random draws to an existing column.
+df.with_columns(noise=pl.col("id").random.normal(mean=0, std=1, seed=42))
+
+# 4. LazyFrame — keep random draws inside a lazy plan.
+df.lazy().random.binomial(n=10, p=0.5, seed=42, name="trials").collect()
+```
+
+When a parameter is column-valued (`pl.col(...)`, a column name, or any expression) and contains nulls, the output is null at those rows instead of raising.
 
 ## Documentation
 
