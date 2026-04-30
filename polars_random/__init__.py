@@ -1,56 +1,348 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Union
 
 import polars as pl
 from polars.plugins import register_plugin_function
 
 from polars_random._internal import __version__ as __version__
 
+__all__ = [
+    "binomial",
+    "normal",
+    "rand",
+    "randint",
+    "uniform",
+]
+
 LIB = Path(__file__).parent
+
+FloatParam = Union[float, int, pl.Expr, str, None]
+IntParam = Union[int, pl.Expr, str, None]
 
 
 def _check_seed(seed: int | None) -> None:
-    """
-    Check if the seed is a non-negative integer.
-
-    Parameters
-    ----------
-    seed : int or None
-        The seed value to check.
-
-    Raises
-    ------
-    ValueError
-        If the seed is a negative integer.
-    """
-    if seed is not None:
-        if seed < 0:
-            raise ValueError("Seed must be a non-negative integer")
+    if seed is not None and seed < 0:
+        raise ValueError("Seed must be a non-negative integer")
 
 
 def _check_probability(prob: float) -> None:
+    if prob < 0 or prob > 1:
+        raise ValueError("Probability must be between 0 and 1")
+
+
+def _is_columnar(value: object) -> bool:
+    return isinstance(value, (pl.Expr, str))
+
+
+def _to_expr(value: FloatParam | IntParam, dtype: pl.DataType | type[pl.DataType]) -> pl.Expr:
+    if isinstance(value, str):
+        return pl.col(value).cast(dtype)
+    if isinstance(value, pl.Expr):
+        return value.cast(dtype)
+    raise TypeError(f"expected column name or expression, got {type(value).__name__}")
+
+
+def _length_anchor(over: pl.Expr | None) -> pl.Expr:
+    if over is None:
+        return pl.int_range(pl.len()).cast(pl.Float64)
+    return over.cast(pl.Float64)
+
+
+def _consistent_pair(a: object, b: object, names: tuple[str, str]) -> None:
+    if _is_columnar(a) != _is_columnar(b):
+        raise ValueError(
+            f"Both {names[0]} and {names[1]} must be either expressions/column names "
+            f"or scalars (a mix is not allowed)."
+        )
+
+
+def _rand_expr(
+    low: FloatParam = None,
+    high: FloatParam = None,
+    seed: int | None = None,
+    over: pl.Expr | None = None,
+) -> pl.Expr:
+    _check_seed(seed)
+    _consistent_pair(low, high, ("low", "high"))
+
+    if _is_columnar(low):
+        return register_plugin_function(
+            args=[_to_expr(low, pl.Float64), _to_expr(high, pl.Float64)],
+            plugin_path=LIB,
+            function_name="rand_expr",
+            is_elementwise=True,
+            kwargs={"seed": seed},
+        )
+    return register_plugin_function(
+        args=[_length_anchor(over)],
+        plugin_path=LIB,
+        function_name="rand",
+        is_elementwise=True,
+        kwargs={"low": low, "high": high, "seed": seed},
+    )
+
+
+def _normal_expr(
+    mean: FloatParam = 0.0,
+    std: FloatParam = 1.0,
+    seed: int | None = None,
+    over: pl.Expr | None = None,
+) -> pl.Expr:
+    _check_seed(seed)
+    _consistent_pair(mean, std, ("mean", "std"))
+
+    if _is_columnar(mean):
+        return register_plugin_function(
+            args=[_to_expr(mean, pl.Float64), _to_expr(std, pl.Float64)],
+            plugin_path=LIB,
+            function_name="normal_expr",
+            is_elementwise=True,
+            kwargs={"seed": seed},
+        )
+    return register_plugin_function(
+        args=[_length_anchor(over)],
+        plugin_path=LIB,
+        function_name="normal",
+        is_elementwise=True,
+        kwargs={"mean": mean, "std": std, "seed": seed},
+    )
+
+
+def _binomial_expr(
+    n: IntParam,
+    p: FloatParam,
+    seed: int | None = None,
+    over: pl.Expr | None = None,
+) -> pl.Expr:
+    _check_seed(seed)
+    _consistent_pair(n, p, ("n", "p"))
+    if isinstance(p, (int, float)):
+        _check_probability(float(p))
+
+    if _is_columnar(n):
+        return register_plugin_function(
+            args=[_to_expr(n, pl.UInt64), _to_expr(p, pl.Float64)],
+            plugin_path=LIB,
+            function_name="binomial_expr",
+            is_elementwise=True,
+            kwargs={"seed": seed},
+        )
+    return register_plugin_function(
+        args=[_length_anchor(over)],
+        plugin_path=LIB,
+        function_name="binomial",
+        is_elementwise=True,
+        kwargs={"n": n, "p": p, "seed": seed},
+    )
+
+
+def _randint_expr(
+    low: IntParam = 0,
+    high: IntParam = 2,
+    seed: int | None = None,
+    over: pl.Expr | None = None,
+) -> pl.Expr:
+    _check_seed(seed)
+    _consistent_pair(low, high, ("low", "high"))
+
+    if _is_columnar(low):
+        return register_plugin_function(
+            args=[_to_expr(low, pl.Int64), _to_expr(high, pl.Int64)],
+            plugin_path=LIB,
+            function_name="randint_expr",
+            is_elementwise=True,
+            kwargs={"seed": seed},
+        )
+    return register_plugin_function(
+        args=[_length_anchor(over)],
+        plugin_path=LIB,
+        function_name="randint",
+        is_elementwise=True,
+        kwargs={"low": low, "high": high, "seed": seed},
+    )
+
+
+def _check_size(size: int | None) -> None:
+    if size is not None and size < 0:
+        raise ValueError("size must be a non-negative integer")
+
+
+def _eager(expr: pl.Expr, size: int) -> pl.Series:
+    return pl.select(expr).to_series()
+
+
+def rand(
+    low: FloatParam = None,
+    high: FloatParam = None,
+    seed: int | None = None,
+    *,
+    size: int | None = None,
+) -> pl.Expr | pl.Series:
     """
-    Check if a probability is between 0 and 1.
+    Uniform `[low, high)` random draws.
 
     Parameters
     ----------
-    prob : float
-        The probability value to check.
+    low, high : float, str (column name), pl.Expr, or None
+        Distribution bounds. Must both be scalars or both be column-like.
+        Defaults to ``[0.0, 1.0)``.
+    seed : int or None, optional
+        Reproducible draws.
+    size : int or None, keyword-only
+        If given, eagerly evaluate and return a Series of that length.
+        Otherwise returns a polars Expr to be used in a select/with_columns.
 
-    Raises
-    ------
-    ValueError
-        If the probability is below 0 or above 1.
+    Returns
+    -------
+    pl.Expr or pl.Series
     """
-    if prob < 0 or prob > 1:
-        raise ValueError("Probability must be between 0 and 1")
+    _check_size(size)
+    if size is None:
+        return _rand_expr(low=low, high=high, seed=seed)
+    over = pl.int_range(0, size).cast(pl.Float64)
+    return _eager(_rand_expr(low=low, high=high, seed=seed, over=over).alias("rand"), size)
+
+
+uniform = rand
+
+
+def normal(
+    mean: FloatParam = 0.0,
+    std: FloatParam = 1.0,
+    seed: int | None = None,
+    *,
+    size: int | None = None,
+) -> pl.Expr | pl.Series:
+    """
+    Normal (Gaussian) random draws.
+
+    Parameters
+    ----------
+    mean, std : float, str (column name), pl.Expr, or None
+        Distribution parameters. Must both be scalars or both be column-like.
+    seed : int or None, optional
+    size : int or None, keyword-only
+        If given, eagerly evaluate and return a Series of that length.
+
+    Returns
+    -------
+    pl.Expr or pl.Series
+    """
+    _check_size(size)
+    if size is None:
+        return _normal_expr(mean=mean, std=std, seed=seed)
+    over = pl.int_range(0, size).cast(pl.Float64)
+    return _eager(_normal_expr(mean=mean, std=std, seed=seed, over=over).alias("normal"), size)
+
+
+def binomial(
+    n: IntParam,
+    p: FloatParam,
+    seed: int | None = None,
+    *,
+    size: int | None = None,
+) -> pl.Expr | pl.Series:
+    """
+    Binomial random draws.
+
+    Parameters
+    ----------
+    n : int, str (column name), or pl.Expr
+        Number of trials.
+    p : float, str (column name), or pl.Expr
+        Probability of success.
+    seed : int or None, optional
+    size : int or None, keyword-only
+        If given, eagerly evaluate and return a Series of that length.
+
+    Returns
+    -------
+    pl.Expr or pl.Series
+    """
+    _check_size(size)
+    if size is None:
+        return _binomial_expr(n=n, p=p, seed=seed)
+    over = pl.int_range(0, size).cast(pl.Float64)
+    return _eager(_binomial_expr(n=n, p=p, seed=seed, over=over).alias("binomial"), size)
+
+
+def randint(
+    low: IntParam = 0,
+    high: IntParam = 2,
+    seed: int | None = None,
+    *,
+    size: int | None = None,
+) -> pl.Expr | pl.Series:
+    """
+    Uniform random integers in ``[low, high)``.
+
+    Parameters
+    ----------
+    low, high : int, str (column name), or pl.Expr
+        Bounds; ``high`` is exclusive. Must both be scalars or both be column-like.
+    seed : int or None, optional
+    size : int or None, keyword-only
+        If given, eagerly evaluate and return a Series of that length.
+
+    Returns
+    -------
+    pl.Expr or pl.Series
+    """
+    _check_size(size)
+    if size is None:
+        return _randint_expr(low=low, high=high, seed=seed)
+    over = pl.int_range(0, size).cast(pl.Float64)
+    return _eager(_randint_expr(low=low, high=high, seed=seed, over=over).alias("randint"), size)
+
+
+@pl.api.register_expr_namespace("random")
+class _RandomExpr:
+    """Random distributions anchored to the length of the parent expression."""
+
+    def __init__(self, expr: pl.Expr) -> None:
+        self._expr = expr
+
+    def rand(
+        self,
+        low: FloatParam = None,
+        high: FloatParam = None,
+        seed: int | None = None,
+    ) -> pl.Expr:
+        return _rand_expr(low=low, high=high, seed=seed, over=self._expr)
+
+    uniform = rand
+
+    def normal(
+        self,
+        mean: FloatParam = 0.0,
+        std: FloatParam = 1.0,
+        seed: int | None = None,
+    ) -> pl.Expr:
+        return _normal_expr(mean=mean, std=std, seed=seed, over=self._expr)
+
+    def binomial(
+        self,
+        n: IntParam,
+        p: FloatParam,
+        seed: int | None = None,
+    ) -> pl.Expr:
+        return _binomial_expr(n=n, p=p, seed=seed, over=self._expr)
+
+    def randint(
+        self,
+        low: IntParam = 0,
+        high: IntParam = 2,
+        seed: int | None = None,
+    ) -> pl.Expr:
+        return _randint_expr(low=low, high=high, seed=seed, over=self._expr)
 
 
 @pl.api.register_dataframe_namespace("random")
 class Random:
     """
-    Namespace for generating new columns in the dataframe containing statistical distributions.
+    Namespace for adding columns of random draws to a ``DataFrame``.
 
     Parameters
     ----------
@@ -60,267 +352,99 @@ class Random:
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
-        self._temp_name = "__temp__"
 
     def rand(
         self,
-        low: float | pl.Expr | str | None = None,
-        high: float | pl.Expr | str | None = None,
+        low: FloatParam = None,
+        high: FloatParam = None,
         seed: int | None = None,
         name: str | None = None,
     ) -> pl.DataFrame:
-        """
-        Generate a random number column.
-
-        Parameters
-        ----------
-        low : float or None, optional
-            Lower boundary for uniform distribution.
-        high : float or None, optional
-            Higher boundary for uniform distribution.
-        seed : int or None, optional
-            The seed value for the random number generator, by default None.
-        name : str or None, optional
-            Name for the generated column. Default value: "rand".
-
-        Returns
-        -------
-        pl.DataFrame
-            The dataframe with the random number column applied.
-
-        Examples
-        --------
-        >>> df = pl.DataFrame({"a": [1, 2, 3]})
-        >>> df.random.rand(seed=42, name="random")
-        shape: (3, 2)
-        ┌─────┬────────────┐
-        │ a   │ random     │
-        ╞═════╪════════════╡
-        │ i64 │ f64        │
-        ├─────┼────────────┤
-        │ 1   │ 0.37454012 │
-        │ 2   │ 0.95071431 │
-        │ 3   │ 0.73199394 │
-        └─────┴────────────┘
-        """
-        _check_seed(seed)
-        if (isinstance(low, (pl.Expr, str)) and not isinstance(high, (pl.Expr, str))) or (
-            isinstance(high, (pl.Expr, str)) and not isinstance(low, (pl.Expr, str))
-        ):
-            raise Exception(
-                "Both low and high must be either expressions/str or floats (a mix is not allowed!)"
-            )
-
-        if isinstance(low, pl.Expr):
-            low = low.cast(pl.Float64)
-        if isinstance(high, pl.Expr):
-            high = high.cast(pl.Float64)
-        if isinstance(low, str):
-            low = pl.col(low).cast(pl.Float64)
-        if isinstance(high, str):
-            high = pl.col(high).cast(pl.Float64)
-
-        if isinstance(low, (pl.Expr, str)) and isinstance(high, (pl.Expr, str)):
-            return self._df.with_columns(
-                register_plugin_function(
-                    args=[low, high],
-                    plugin_path=LIB,
-                    function_name="rand_expr",
-                    is_elementwise=True,
-                    kwargs={"seed": seed},
-                ).alias(name or "rand")
-            )
-        else:
-            return (
-                self._df.with_columns(
-                    pl.lit(0.0).alias(self._temp_name),
-                )
-                .with_columns(
-                    register_plugin_function(
-                        args=pl.col("__temp__"),
-                        plugin_path=LIB,
-                        function_name="rand",
-                        is_elementwise=True,
-                        kwargs={
-                            "low": low,
-                            "high": high,
-                            "seed": seed,
-                        },
-                    ).alias(name or "rand")
-                )
-                .drop(self._temp_name)
-            )
+        return self._df.with_columns(
+            _rand_expr(low=low, high=high, seed=seed).alias(name or "rand")
+        )
 
     uniform = rand
 
     def normal(
         self,
-        mean: float | pl.Expr | str | None = 0.0,
-        std: float | pl.Expr | str | None = 1.0,
+        mean: FloatParam = 0.0,
+        std: FloatParam = 1.0,
         seed: int | None = None,
         name: str | None = None,
     ) -> pl.DataFrame:
-        """
-        Generate a normal distribution random number column.
-
-        Parameters
-        ----------
-        mean : float or None, optional
-            The mean of the normal distribution, by default 0.0.
-        std : float or None, optional
-            The standard deviation of the normal distribution, by default 1.0.
-        seed : float or None, optional
-            The seed value for the random number generator, by default None.
-        name : str or None, optional
-            Name for the generated column. Default value: "normal".
-
-        Returns
-        -------
-        pl.DataFrame
-            The dataframe with the normal distribution random number generator applied.
-
-        Examples
-        --------
-        >>> df = pl.DataFrame({"a": [1, 2, 3]})
-        >>> df.random.normal(mean=0, std=1, seed=42, name="normal")
-        shape: (3, 2)
-        ┌─────┬────────────┐
-        │ a   │ normal     │
-        ╞═════╪════════════╡
-        │ i64 │ f64        │
-        ├─────┼────────────┤
-        │ 1   │ 0.49671415 │
-        │ 2   │ -0.1382643 │
-        │ 3   │ 0.64768854 │
-        └─────┴────────────┘
-        """
-        _check_seed(seed)
-        if (isinstance(mean, (pl.Expr, str)) and not isinstance(std, (pl.Expr, str))) or (
-            isinstance(std, (pl.Expr, str)) and not isinstance(mean, (pl.Expr, str))
-        ):
-            raise Exception(
-                "Both mean and std must be either expressions/str or floats (a mix is not allowed!)"
-            )
-
-        if isinstance(mean, pl.Expr):
-            mean = mean.cast(pl.Float64)
-        if isinstance(std, pl.Expr):
-            std = std.cast(pl.Float64)
-        if isinstance(mean, str):
-            mean = pl.col(mean).cast(pl.Float64)
-        if isinstance(std, str):
-            std = pl.col(std).cast(pl.Float64)
-
-        if isinstance(mean, (pl.Expr, str)) and isinstance(std, (pl.Expr, str)):
-            return self._df.with_columns(
-                register_plugin_function(
-                    args=[mean, std],
-                    plugin_path=LIB,
-                    function_name="normal_expr",
-                    is_elementwise=True,
-                    kwargs={"seed": seed},
-                ).alias(name or "normal")
-            )
-        else:
-            return (
-                self._df.with_columns(
-                    pl.lit(0.0).alias(self._temp_name),
-                )
-                .with_columns(
-                    register_plugin_function(
-                        args=pl.col("__temp__"),
-                        plugin_path=LIB,
-                        function_name="normal",
-                        is_elementwise=True,
-                        kwargs={"mean": mean, "std": std, "seed": seed},
-                    ).alias(name or "normal")
-                )
-                .drop(self._temp_name)
-            )
+        return self._df.with_columns(
+            _normal_expr(mean=mean, std=std, seed=seed).alias(name or "normal")
+        )
 
     def binomial(
         self,
-        n: pl.Expr | int,
-        p: pl.Expr | float,
+        n: IntParam,
+        p: FloatParam,
         seed: int | None = None,
         name: str | None = None,
     ) -> pl.DataFrame:
-        """
-        Generate a binomial distribution random number expression.
+        return self._df.with_columns(_binomial_expr(n=n, p=p, seed=seed).alias(name or "binomial"))
 
-        Parameters
-        ----------
-        n : int
-            The number of trials.
-        p : float
-            The probability of success.
-        seed : int or None, optional
-            The seed value for the random number generator, by default None.
-        name : str or None, optional
-            Name for the generated column. Default value: "binomial".
+    def randint(
+        self,
+        low: IntParam = 0,
+        high: IntParam = 2,
+        seed: int | None = None,
+        name: str | None = None,
+    ) -> pl.DataFrame:
+        return self._df.with_columns(
+            _randint_expr(low=low, high=high, seed=seed).alias(name or "randint")
+        )
 
-        Returns
-        -------
-        pl.DataFrame
-            The expression with the binomial distribution random number generator applied.
 
-        Examples
-        --------
-        >>> df = pl.DataFrame({"a": [1, 2, 3]})
-        >>> df.random.binomial(n=10, p=0.5, seed=42)
-        shape: (3, 2)
-        ┌─────┬────────────┐
-        │ a   │ binomial   │
-        ╞═════╪════════════╡
-        │ i64 │ i64        │
-        ├─────┼────────────┤
-        │ 1   │ 5          │
-        │ 2   │ 5          │
-        │ 3   │ 7          │
-        └─────┴────────────┘
-        """
-        _check_seed(seed)
-        if (isinstance(n, (pl.Expr, str)) and not isinstance(p, (pl.Expr, str))) or (
-            isinstance(p, (pl.Expr, str)) and not isinstance(n, (pl.Expr, str))
-        ):
-            raise Exception(
-                "Both n and p must be either expressions/str or floats (a mix is not allowed!)"
-            )
-        if isinstance(p, (float, int)):
-            _check_probability(p)
+@pl.api.register_lazyframe_namespace("random")
+class _RandomLazyFrame:
+    """Same API as ``df.random`` but for ``LazyFrame``."""
 
-        if isinstance(n, pl.Expr):
-            n = n.cast(pl.UInt64)
-        if isinstance(n, str):
-            n = pl.col(n).cast(pl.UInt64)
-        if isinstance(p, pl.Expr):
-            p = p.cast(pl.Float64)
-        if isinstance(p, str):
-            p = pl.col(p).cast(pl.Float64)
+    def __init__(self, lf: pl.LazyFrame) -> None:
+        self._lf = lf
 
-        if isinstance(n, (pl.Expr, str)) and isinstance(p, (pl.Expr, str)):
-            return self._df.with_columns(
-                register_plugin_function(
-                    args=[n, p],
-                    plugin_path=LIB,
-                    function_name="binomial_expr",
-                    is_elementwise=True,
-                    kwargs={"seed": seed},
-                ).alias(name or "binomial")
-            )
-        else:
-            return (
-                self._df.with_columns(
-                    pl.lit(0.0).alias(self._temp_name),
-                )
-                .with_columns(
-                    register_plugin_function(
-                        args=pl.col("__temp__"),
-                        plugin_path=LIB,
-                        function_name="binomial",
-                        is_elementwise=True,
-                        kwargs={"n": n, "p": p, "seed": seed},
-                    ).alias(name or "binomial")
-                )
-                .drop(self._temp_name)
-            )
+    def rand(
+        self,
+        low: FloatParam = None,
+        high: FloatParam = None,
+        seed: int | None = None,
+        name: str | None = None,
+    ) -> pl.LazyFrame:
+        return self._lf.with_columns(
+            _rand_expr(low=low, high=high, seed=seed).alias(name or "rand")
+        )
+
+    uniform = rand
+
+    def normal(
+        self,
+        mean: FloatParam = 0.0,
+        std: FloatParam = 1.0,
+        seed: int | None = None,
+        name: str | None = None,
+    ) -> pl.LazyFrame:
+        return self._lf.with_columns(
+            _normal_expr(mean=mean, std=std, seed=seed).alias(name or "normal")
+        )
+
+    def binomial(
+        self,
+        n: IntParam,
+        p: FloatParam,
+        seed: int | None = None,
+        name: str | None = None,
+    ) -> pl.LazyFrame:
+        return self._lf.with_columns(_binomial_expr(n=n, p=p, seed=seed).alias(name or "binomial"))
+
+    def randint(
+        self,
+        low: IntParam = 0,
+        high: IntParam = 2,
+        seed: int | None = None,
+        name: str | None = None,
+    ) -> pl.LazyFrame:
+        return self._lf.with_columns(
+            _randint_expr(low=low, high=high, seed=seed).alias(name or "randint")
+        )
