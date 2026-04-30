@@ -26,8 +26,8 @@
   just --justfile {{justfile()}} clippy
   echo cargo fmt
   just --justfile {{justfile()}} fmt
-  echo mypy
-  just --justfile {{justfile()}} mypy
+  echo ty
+  just --justfile {{justfile()}} ty
   echo ruff check
   just --justfile {{justfile()}} ruff-check
   echo ruff formatting
@@ -42,8 +42,8 @@
 @fmt:
   cargo fmt --all -- --check
 
-@mypy:
-  uv run mypy polars_random tests
+@ty:
+  uv run ty check polars_random tests
 
 @ruff-check:
   uv run ruff check polars_random tests --fix
