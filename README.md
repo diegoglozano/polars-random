@@ -209,6 +209,51 @@ df.lazy().random.binomial(n=10, p=0.5, seed=42, name="trials").collect()
 
 When a parameter is column-valued (`pl.col(...)`, a column name, or any expression) and contains nulls, the output is null at those rows instead of raising.
 
+## Benchmarks
+
+`polars-random` is a Rust plugin built on `rand` / `rand_distr`, so for the
+distributions where vectorisation dominates (`uniform`, `normal`, `randint`) it
+beats `numpy.random` once you have enough rows to amortise expression-engine
+overhead. Below are speedups against `numpy.random.default_rng(42)` on a fresh
+release build (full table and methodology: [`benchmarks/results.md`](benchmarks/results.md)).
+
+| Distribution | 10K rows | 100K rows | 1M rows | 10M rows |
+| ------------ | -------: | --------: | ------: | -------: |
+| `uniform`    |    0.10x |     0.46x |   0.96x |   2.20x |
+| `normal`     |    0.53x |     1.57x |   1.77x |   1.95x |
+| `randint`    |    0.16x |     0.76x |   0.94x |   1.48x |
+| `binomial`   |    0.70x |     0.84x |   0.87x |   1.00x |
+
+Speedup is `numpy_best_time / polars_random_best_time` for the "polars\_random
+expression" scenario (`df.with_columns(pr.<dist>(..., seed=42))`); a value above
+1 means polars-random is faster. At small sizes numpy wins because the polars
+expression engine has fixed per-call overhead; from ~1M rows the raw kernel
+takes over and polars-random pulls ahead, reaching ~2x for `uniform` and
+`normal` at 10M rows. `binomial` is sampler-bound and stays at parity with
+numpy at every size we measured.
+
+The plugin also avoids the NumPy → Polars `Series` materialisation cost you'd
+otherwise pay when stitching `np.random` into a polars pipeline.
+
+### Reproducing
+
+```sh
+# release build of the Rust extension
+just install-release
+
+# run the benchmark (writes benchmarks/results.md and benchmarks/results.json)
+just bench
+```
+
+`just bench` is equivalent to:
+
+```sh
+uv run --with numpy python benchmarks/benchmark.py
+```
+
+The script accepts `--sizes`, `--repeats`, `--inner`, `--output`, and `--json`
+flags; see `python benchmarks/benchmark.py --help`.
+
 ## Documentation
 
 Full API reference: <https://diegoglozano.github.io/polars-random/>

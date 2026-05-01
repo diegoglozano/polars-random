@@ -126,3 +126,7 @@ ignore=[
   "ISC001",
   "ISC002",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Benchmarks are CLI scripts: they print to stdout and rebind names in closures.
+"benchmarks/*.py" = ["T201", "T203", "B023"]

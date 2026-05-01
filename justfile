@@ -53,3 +53,6 @@
 
 @test *args="":
   uv run pytest {{args}}
+
+@bench *args="":
+  uv run --with numpy python benchmarks/benchmark.py {{args}}
