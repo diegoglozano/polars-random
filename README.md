@@ -209,6 +209,79 @@ df.lazy().random.binomial(n=10, p=0.5, seed=42, name="trials").collect()
 
 When a parameter is column-valued (`pl.col(...)`, a column name, or any expression) and contains nulls, the output is null at those rows instead of raising.
 
+## Benchmarks
+
+`polars-random` is a Rust plugin built on `rand` / `rand_distr`, so on the
+single-threaded path it matches `numpy.random` for the distributions where
+vectorisation dominates (`uniform`, `normal`, `randint`) and is sampler-bound
+for `binomial`. Run inside a `LazyFrame` with the **streaming engine**, polars
+parallelises the elementwise plugin across worker threads and pulls
+substantially further ahead.
+
+Speedup is `numpy_best_time / polars_random_best_time` (best of 5×2 timed
+calls); a value above 1 means polars-random is faster. Full table and
+methodology: [`benchmarks/results.md`](benchmarks/results.md).
+
+### Eager / lazy in-memory (single-threaded plugin)
+
+`df.with_columns(pr.<dist>(..., seed=42))` — the typical "add a random column"
+shape:
+
+| Distribution | 10K rows | 100K rows | 1M rows | 10M rows | 50M rows |
+| ------------ | -------: | --------: | ------: | -------: | -------: |
+| `uniform`    |    0.19x |     0.77x |   1.15x |    1.78x |    1.65x |
+| `normal`     |    0.43x |     1.43x |   1.84x |    1.96x |    1.96x |
+| `randint`    |    0.16x |     0.52x |   0.78x |    1.30x |    1.18x |
+| `binomial`   |    0.65x |     0.86x |   0.89x |    0.92x |    0.91x |
+
+### Lazy + streaming engine (parallel)
+
+`lf.with_columns(pr.<dist>(..., seed=42)).collect(engine="streaming")`:
+
+| Distribution | 10K rows | 100K rows | 1M rows | 10M rows | 50M rows |
+| ------------ | -------: | --------: | ------: | -------: | -------: |
+| `uniform`    |    0.07x |     0.48x |   1.39x |    3.85x |    3.66x |
+| `normal`     |    0.18x |     1.38x |   2.89x |    5.31x |    5.40x |
+| `randint`    |    0.07x |     0.30x |   1.39x |    2.95x |    3.30x |
+| `binomial`   |    0.69x |     2.05x |   3.24x |    3.48x |    3.39x |
+
+At small sizes the polars expression engine pays a fixed per-call cost (a few
+hundred microseconds) so numpy wins; from ~1M rows raw kernel speed dominates.
+On the streaming engine, `binomial` — sampler-bound on a single thread — is the
+biggest winner because the heavy per-row work parallelises cleanly.
+
+Two caveats:
+
+1. **Streaming re-seeds per chunk.** The streaming engine processes data in
+   chunks and the plugin is invoked once per chunk with the same `seed=`, so
+   the resulting column is deterministic for a given chunking but differs
+   bit-for-bit from the in-memory engine. Both are valid samples from the
+   distribution; pick the engine first, then fix `seed`.
+2. **NumPy → Polars** also costs nothing extra at scale — the
+   `numpy -> pl.Series` row in `benchmarks/results.md` is within ~1% of plain
+   numpy. The polars-random win is in the kernel itself plus parallelism, not
+   in avoiding a copy.
+
+### Reproducing
+
+```sh
+# release build of the Rust extension
+just install-release
+
+# run the benchmark (writes benchmarks/results.md and benchmarks/results.json)
+just bench
+```
+
+`just bench` is equivalent to:
+
+```sh
+uv run --with numpy python benchmarks/benchmark.py
+```
+
+The script accepts `--sizes`, `--repeats`, `--inner`, `--output`, and `--json`
+flags; see `python benchmarks/benchmark.py --help`. Defaults are
+`--sizes 10000,100000,1000000,10000000,50000000 --repeats 5 --inner 2`.
+
 ## Documentation
 
 Full API reference: <https://diegoglozano.github.io/polars-random/>
