@@ -211,29 +211,56 @@ When a parameter is column-valued (`pl.col(...)`, a column name, or any expressi
 
 ## Benchmarks
 
-`polars-random` is a Rust plugin built on `rand` / `rand_distr`, so for the
-distributions where vectorisation dominates (`uniform`, `normal`, `randint`) it
-beats `numpy.random` once you have enough rows to amortise expression-engine
-overhead. Below are speedups against `numpy.random.default_rng(42)` on a fresh
-release build (full table and methodology: [`benchmarks/results.md`](benchmarks/results.md)).
+`polars-random` is a Rust plugin built on `rand` / `rand_distr`, so on the
+single-threaded path it matches `numpy.random` for the distributions where
+vectorisation dominates (`uniform`, `normal`, `randint`) and is sampler-bound
+for `binomial`. Run inside a `LazyFrame` with the **streaming engine**, polars
+parallelises the elementwise plugin across worker threads and pulls
+substantially further ahead.
 
-| Distribution | 10K rows | 100K rows | 1M rows | 10M rows |
-| ------------ | -------: | --------: | ------: | -------: |
-| `uniform`    |    0.10x |     0.46x |   0.96x |   2.20x |
-| `normal`     |    0.53x |     1.57x |   1.77x |   1.95x |
-| `randint`    |    0.16x |     0.76x |   0.94x |   1.48x |
-| `binomial`   |    0.70x |     0.84x |   0.87x |   1.00x |
+Speedup is `numpy_best_time / polars_random_best_time` (best of 5×2 timed
+calls); a value above 1 means polars-random is faster. Full table and
+methodology: [`benchmarks/results.md`](benchmarks/results.md).
 
-Speedup is `numpy_best_time / polars_random_best_time` for the "polars\_random
-expression" scenario (`df.with_columns(pr.<dist>(..., seed=42))`); a value above
-1 means polars-random is faster. At small sizes numpy wins because the polars
-expression engine has fixed per-call overhead; from ~1M rows the raw kernel
-takes over and polars-random pulls ahead, reaching ~2x for `uniform` and
-`normal` at 10M rows. `binomial` is sampler-bound and stays at parity with
-numpy at every size we measured.
+### Eager / lazy in-memory (single-threaded plugin)
 
-The plugin also avoids the NumPy → Polars `Series` materialisation cost you'd
-otherwise pay when stitching `np.random` into a polars pipeline.
+`df.with_columns(pr.<dist>(..., seed=42))` — the typical "add a random column"
+shape:
+
+| Distribution | 10K rows | 100K rows | 1M rows | 10M rows | 50M rows |
+| ------------ | -------: | --------: | ------: | -------: | -------: |
+| `uniform`    |    0.19x |     0.77x |   1.15x |    1.78x |    1.65x |
+| `normal`     |    0.43x |     1.43x |   1.84x |    1.96x |    1.96x |
+| `randint`    |    0.16x |     0.52x |   0.78x |    1.30x |    1.18x |
+| `binomial`   |    0.65x |     0.86x |   0.89x |    0.92x |    0.91x |
+
+### Lazy + streaming engine (parallel)
+
+`lf.with_columns(pr.<dist>(..., seed=42)).collect(engine="streaming")`:
+
+| Distribution | 10K rows | 100K rows | 1M rows | 10M rows | 50M rows |
+| ------------ | -------: | --------: | ------: | -------: | -------: |
+| `uniform`    |    0.07x |     0.48x |   1.39x |    3.85x |    3.66x |
+| `normal`     |    0.18x |     1.38x |   2.89x |    5.31x |    5.40x |
+| `randint`    |    0.07x |     0.30x |   1.39x |    2.95x |    3.30x |
+| `binomial`   |    0.69x |     2.05x |   3.24x |    3.48x |    3.39x |
+
+At small sizes the polars expression engine pays a fixed per-call cost (a few
+hundred microseconds) so numpy wins; from ~1M rows raw kernel speed dominates.
+On the streaming engine, `binomial` — sampler-bound on a single thread — is the
+biggest winner because the heavy per-row work parallelises cleanly.
+
+Two caveats:
+
+1. **Streaming re-seeds per chunk.** The streaming engine processes data in
+   chunks and the plugin is invoked once per chunk with the same `seed=`, so
+   the resulting column is deterministic for a given chunking but differs
+   bit-for-bit from the in-memory engine. Both are valid samples from the
+   distribution; pick the engine first, then fix `seed`.
+2. **NumPy → Polars** also costs nothing extra at scale — the
+   `numpy -> pl.Series` row in `benchmarks/results.md` is within ~1% of plain
+   numpy. The polars-random win is in the kernel itself plus parallelism, not
+   in avoiding a copy.
 
 ### Reproducing
 
@@ -252,7 +279,8 @@ uv run --with numpy python benchmarks/benchmark.py
 ```
 
 The script accepts `--sizes`, `--repeats`, `--inner`, `--output`, and `--json`
-flags; see `python benchmarks/benchmark.py --help`.
+flags; see `python benchmarks/benchmark.py --help`. Defaults are
+`--sizes 10000,100000,1000000,10000000,50000000 --repeats 5 --inner 2`.
 
 ## Documentation
 

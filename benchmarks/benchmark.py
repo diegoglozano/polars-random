@@ -1,5 +1,6 @@
 """
-Benchmark `polars-random` against `numpy.random`.
+Benchmark `polars-random` against `numpy.random` and across polars execution
+engines (eager, lazy in-memory, lazy streaming).
 
 Run with::
 
@@ -7,24 +8,30 @@ Run with::
 
 Optional flags::
 
-    --sizes 10000,100000,1000000,10000000   # comma-separated row counts
-    --repeats 7                              # timing repeats per case (best-of)
-    --inner 3                                # inner timeit loops per repeat
-    --output benchmarks/results.md           # markdown table written here
-    --json benchmarks/results.json           # raw timings for downstream tooling
+    --sizes 100000,1000000,10000000,50000000   # comma-separated row counts
+    --repeats 5                                 # timing repeats per case (best-of)
+    --inner 2                                   # inner timeit loops per repeat
+    --output benchmarks/results.md              # markdown table written here
+    --json benchmarks/results.json              # raw timings for downstream tooling
 
 The script is deterministic: every distribution is drawn with ``seed=42`` and the
-same ``size`` argument so successive runs produce numerically identical columns
-and the only thing varying is wall-clock time.
+same ``size`` argument so successive runs are timing-noise only. Note that the
+streaming engine processes data in chunks and re-applies the seed per chunk, so
+its output sequence differs from the in-memory engine even at the same seed —
+both are reproducible, just not bit-identical to each other.
 
 Scenarios per distribution / size:
 
-* ``numpy``                 -- ``np.random.default_rng(42).<dist>(..., size=N)``
-* ``numpy -> pl.Series``    -- numpy draw + ``pl.Series(...)`` round-trip (the
-  cost paid when using numpy from inside a polars pipeline).
-* ``polars_random eager``   -- ``pr.<dist>(..., size=N, seed=42)`` top-level API.
-* ``polars_random expr``    -- ``df.with_columns(pr.<dist>(..., seed=42))`` on a
-  pre-existing N-row frame; this is the typical "add a random column" usage.
+* ``numpy``                       -- ``np.random.default_rng(42).<dist>(..., size=N)``
+* ``numpy -> pl.Series``          -- numpy draw + ``pl.Series(...)`` round-trip
+  (the cost paid when stitching ``np.random`` into a polars pipeline).
+* ``polars_random eager``         -- ``pr.<dist>(..., size=N, seed=42)`` top-level API.
+* ``polars_random expr``          -- ``df.with_columns(pr.<dist>(..., seed=42))``
+  on a pre-existing N-row eager frame.
+* ``polars_random lazy``          -- ``lf.with_columns(...).collect()`` (default
+  in-memory engine, lazy plan).
+* ``polars_random streaming``     -- ``lf.with_columns(...).collect(engine="streaming")``
+  (chunked streaming engine).
 """
 
 from __future__ import annotations
@@ -84,96 +91,76 @@ def _make_anchor_df(n: int) -> pl.DataFrame:
     return pl.DataFrame({"_": pl.zeros(n, eager=True)})
 
 
+# (distribution_name, numpy_draw, polars_random_eager, polars_random_expr_factory)
+#
+# - ``numpy_draw(n)``        : produces an ndarray of length n using a fresh default_rng(42).
+# - ``pr_eager(n)``          : top-level polars_random call returning a Series.
+# - ``pr_expr_factory()``    : returns a polars expression to be used inside with_columns;
+#                              callable so each scenario gets a fresh expression object.
+DISTRIBUTIONS: list[tuple[str, Callable, Callable, Callable]] = [
+    (
+        "uniform",
+        lambda n: np.random.default_rng(42).uniform(0.0, 1.0, size=n),
+        lambda n: pr.rand(low=0.0, high=1.0, size=n, seed=42),
+        lambda: pr.rand(low=0.0, high=1.0, seed=42).alias("uniform"),
+    ),
+    (
+        "normal",
+        lambda n: np.random.default_rng(42).normal(0.0, 1.0, size=n),
+        lambda n: pr.normal(mean=0.0, std=1.0, size=n, seed=42),
+        lambda: pr.normal(mean=0.0, std=1.0, seed=42).alias("normal"),
+    ),
+    (
+        "binomial",
+        lambda n: np.random.default_rng(42).binomial(100, 0.5, size=n),
+        lambda n: pr.binomial(n=100, p=0.5, size=n, seed=42),
+        lambda: pr.binomial(n=100, p=0.5, seed=42).alias("binomial"),
+    ),
+    (
+        "randint",
+        lambda n: np.random.default_rng(42).integers(0, 1000, size=n),
+        lambda n: pr.randint(low=0, high=1000, size=n, seed=42),
+        lambda: pr.randint(low=0, high=1000, seed=42).alias("randint"),
+    ),
+]
+
+
 def build_cases(sizes: list[int]) -> list[tuple[str, str, int, Callable[[], object]]]:
     """Return ``(distribution, scenario, size, fn)`` tuples ready to be timed."""
     cases: list[tuple[str, str, int, Callable[[], object]]] = []
 
     for n in sizes:
-        anchor = _make_anchor_df(n)
+        anchor_df = _make_anchor_df(n)
+        anchor_lf = anchor_df.lazy()
 
-        # ---- uniform ----------------------------------------------------------------
-        def numpy_uniform(n=n):
-            return np.random.default_rng(42).uniform(0.0, 1.0, size=n)
+        for dist, np_draw, pr_eager_call, pr_expr in DISTRIBUTIONS:
 
-        def numpy_uniform_series(n=n):
-            arr = np.random.default_rng(42).uniform(0.0, 1.0, size=n)
-            return pl.Series("uniform", arr)
+            def numpy_only(n=n, np_draw=np_draw):
+                return np_draw(n)
 
-        def pr_uniform_eager(n=n):
-            return pr.rand(low=0.0, high=1.0, size=n, seed=42)
+            def numpy_to_series(n=n, np_draw=np_draw, dist=dist):
+                return pl.Series(dist, np_draw(n))
 
-        def pr_uniform_expr(df=anchor):
-            return df.with_columns(pr.rand(low=0.0, high=1.0, seed=42).alias("uniform"))
+            def pr_eager(n=n, pr_eager_call=pr_eager_call):
+                return pr_eager_call(n)
 
-        cases += [
-            ("uniform", "numpy", n, numpy_uniform),
-            ("uniform", "numpy -> pl.Series", n, numpy_uniform_series),
-            ("uniform", "polars_random eager", n, pr_uniform_eager),
-            ("uniform", "polars_random expr", n, pr_uniform_expr),
-        ]
+            def pr_expr_eager(df=anchor_df, pr_expr=pr_expr):
+                return df.with_columns(pr_expr())
 
-        # ---- normal -----------------------------------------------------------------
-        def numpy_normal(n=n):
-            return np.random.default_rng(42).normal(0.0, 1.0, size=n)
+            def pr_lazy_inmem(lf=anchor_lf, pr_expr=pr_expr):
+                return lf.with_columns(pr_expr()).collect()
 
-        def numpy_normal_series(n=n):
-            arr = np.random.default_rng(42).normal(0.0, 1.0, size=n)
-            return pl.Series("normal", arr)
+            def pr_lazy_streaming(lf=anchor_lf, pr_expr=pr_expr):
+                return lf.with_columns(pr_expr()).collect(engine="streaming")
 
-        def pr_normal_eager(n=n):
-            return pr.normal(mean=0.0, std=1.0, size=n, seed=42)
-
-        def pr_normal_expr(df=anchor):
-            return df.with_columns(pr.normal(mean=0.0, std=1.0, seed=42).alias("normal"))
-
-        cases += [
-            ("normal", "numpy", n, numpy_normal),
-            ("normal", "numpy -> pl.Series", n, numpy_normal_series),
-            ("normal", "polars_random eager", n, pr_normal_eager),
-            ("normal", "polars_random expr", n, pr_normal_expr),
-        ]
-
-        # ---- binomial ---------------------------------------------------------------
-        def numpy_binomial(n=n):
-            return np.random.default_rng(42).binomial(100, 0.5, size=n)
-
-        def numpy_binomial_series(n=n):
-            arr = np.random.default_rng(42).binomial(100, 0.5, size=n)
-            return pl.Series("binomial", arr)
-
-        def pr_binomial_eager(n=n):
-            return pr.binomial(n=100, p=0.5, size=n, seed=42)
-
-        def pr_binomial_expr(df=anchor):
-            return df.with_columns(pr.binomial(n=100, p=0.5, seed=42).alias("binomial"))
-
-        cases += [
-            ("binomial", "numpy", n, numpy_binomial),
-            ("binomial", "numpy -> pl.Series", n, numpy_binomial_series),
-            ("binomial", "polars_random eager", n, pr_binomial_eager),
-            ("binomial", "polars_random expr", n, pr_binomial_expr),
-        ]
-
-        # ---- randint ----------------------------------------------------------------
-        def numpy_randint(n=n):
-            return np.random.default_rng(42).integers(0, 1000, size=n)
-
-        def numpy_randint_series(n=n):
-            arr = np.random.default_rng(42).integers(0, 1000, size=n)
-            return pl.Series("randint", arr)
-
-        def pr_randint_eager(n=n):
-            return pr.randint(low=0, high=1000, size=n, seed=42)
-
-        def pr_randint_expr(df=anchor):
-            return df.with_columns(pr.randint(low=0, high=1000, seed=42).alias("randint"))
-
-        cases += [
-            ("randint", "numpy", n, numpy_randint),
-            ("randint", "numpy -> pl.Series", n, numpy_randint_series),
-            ("randint", "polars_random eager", n, pr_randint_eager),
-            ("randint", "polars_random expr", n, pr_randint_expr),
-        ]
+            cases += [
+                (dist, "numpy", n, numpy_only),
+                (dist, "numpy -> pl.Series", n, numpy_to_series),
+                (dist, "polars_random eager", n, pr_eager),
+                (dist, "polars_random expr", n, pr_expr_eager),
+                (dist, "polars_random lazy", n, pr_lazy_inmem),
+                (dist, "polars_random streaming", n, pr_lazy_streaming),
+            ]
 
     return cases
 
@@ -253,11 +240,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--sizes",
-        default="10000,100000,1000000,10000000",
+        default="10000,100000,1000000,10000000,50000000",
         help="Comma-separated list of row counts to benchmark.",
     )
-    parser.add_argument("--repeats", type=int, default=7)
-    parser.add_argument("--inner", type=int, default=3)
+    parser.add_argument("--repeats", type=int, default=5)
+    parser.add_argument("--inner", type=int, default=2)
     parser.add_argument(
         "--output",
         default="benchmarks/results.md",
@@ -283,7 +270,7 @@ def main() -> int:
         case.times = time_callable(fn, repeats=args.repeats, inner=args.inner)
         results.append(case)
         print(
-            f"  {distribution:>9} | {scenario:<22} | size={size:>10,} | "
+            f"  {distribution:>9} | {scenario:<26} | size={size:>11,} | "
             f"best={format_seconds(case.best)} | "
             f"throughput={format_throughput(case.best, size)}",
             flush=True,
