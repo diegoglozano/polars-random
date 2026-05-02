@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/diegoglozano/polars-random/main/docs/assets/logo.svg" alt="polars-random" width="160"/>
+</p>
+
 # polars-random
 
 [![PyPI version](https://img.shields.io/pypi/v/polars-random.svg)](https://pypi.org/project/polars-random/)

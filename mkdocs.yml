@@ -5,6 +5,8 @@ site_url: https://diegoglozano.github.io/polars-random/
 theme:
   name: material
   locale: en
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
   icon:
     repo: fontawesome/brands/github
   palette:
