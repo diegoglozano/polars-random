@@ -45,7 +45,11 @@ def set_random_seed(seed: int) -> None:
     rewinds the sequence, reproducing the same draws.
 
     An explicit ``seed=`` on an individual call always overrides the global
-    seed for that call.
+    seed for that call. Because each seedless draw takes the *next* value from
+    the generator, reproducibility depends on the order and number of seedless
+    draws: inserting or reordering one shifts every later draw. To make two
+    columns *identical*, give them the same explicit ``seed=`` rather than
+    relying on the global seed (which is designed to keep them independent).
 
     This is independent of :func:`polars.set_random_seed`, which seeds Polars'
     own operations (``.sample()``, ``.shuffle()``, …) and is not readable by

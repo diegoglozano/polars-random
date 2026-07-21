@@ -124,6 +124,21 @@ Semantics:
 - **An explicit `seed=`** on a call always overrides the global seed for that call.
 - **Without any global seed**, seedless draws use OS entropy (the historical default) — nothing changes for existing code.
 
+### Want two *identical* columns?
+
+Seedless draws under a global seed are always independent (that is the point), so they never coincide. To make two columns equal, give them the **same explicit `seed=`** — that pins both to the same draw and bypasses the global generator:
+
+```python
+df.with_columns(
+    a=pr.normal(seed=7),
+    b=pr.normal(seed=7),   # a == b, byte-for-byte
+)
+```
+
+### Reproducibility depends on call order
+
+Under a global seed, each seedless draw takes the *next* value from the generator, so reproducibility depends on the **order and number** of seedless draws — the same sequence of calls reproduces the same columns. Inserting or reordering a seedless draw shifts every later one (exactly like NumPy's or Polars' global RNG). If a specific column must stay fixed regardless of surrounding code, pin it with an explicit `seed=`.
+
 > `pr.set_random_seed` is independent of `polars.set_random_seed`. Polars seeds its *own* operations (`.sample()`, `.shuffle()`, …) and exposes only a setter — there is no public way for a plugin to read Polars' seed — so `polars-random` keeps its own global seed. Set both if you want Polars *and* `polars-random` reproducible in the same script.
 
 ## Distributions

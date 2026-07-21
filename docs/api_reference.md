@@ -37,6 +37,15 @@ df = pl.DataFrame({"id": range(5)})
 df.with_columns(a=pr.normal(), b=pr.rand())  # reproducible, no per-call seed
 ```
 
+Reproducibility depends on the order and number of seedless draws (each takes
+the next value from the generator, like NumPy's or Polars' global RNG). To make
+two columns *identical*, give them the same explicit `seed=` — the global seed
+is designed to keep seedless draws independent:
+
+```python
+df.with_columns(a=pr.normal(seed=7), b=pr.normal(seed=7))  # a == b
+```
+
 `pr.set_random_seed` is independent of `polars.set_random_seed` (which seeds
 Polars' own `.sample()` / `.shuffle()` and is not readable by plugins).
 

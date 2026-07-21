@@ -226,6 +226,15 @@ def test_global_seed_distinct_expressions_are_independent():
     assert out["a"].to_list() != out["b"].to_list()
 
 
+def test_same_explicit_seed_gives_identical_columns():
+    # Documented recipe for two equal columns: same explicit seed, which
+    # bypasses the (independence-preserving) global generator.
+    df = pl.DataFrame({"x": range(100)})
+    pr.set_random_seed(42)
+    out = df.with_columns(a=pr.normal(seed=7), b=pr.normal(seed=7))
+    assert out["a"].to_list() == out["b"].to_list()
+
+
 def test_explicit_seed_overrides_global():
     df = pl.DataFrame({"x": range(100)})
     pr.set_random_seed(42)
