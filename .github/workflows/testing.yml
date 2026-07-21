@@ -53,7 +53,7 @@ jobs:
       with:
         enable-cache: true
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ env.PYTHON_VERSION }}
     - name: Cache Rust dependencies
@@ -80,7 +80,7 @@ jobs:
       with:
         enable-cache: true
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ env.PYTHON_VERSION }}
     - name: Install Dependencies
@@ -106,7 +106,7 @@ jobs:
       with:
         enable-cache: true
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
     - name: Download prebuilt wheel
