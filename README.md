@@ -46,7 +46,7 @@ Available distributions: `rand` / `uniform`, `normal`, `binomial`, `randint`. Ev
 
 - **Polars-native** — outputs are regular Polars columns, composable with the rest of your pipeline (no NumPy round-trips).
 - **Per-row parameters** — `mean`, `std`, `low`, `high`, `n`, `p` can come from other columns, so each row can be drawn from a different distribution.
-- **Reproducible** — pass `seed=...` for deterministic draws.
+- **Reproducible** — pass `seed=...` per call, or set one global seed with `pr.set_random_seed(...)`.
 - **Fast** — implemented in Rust on top of `rand` / `rand_distr`.
 
 ## Installation
@@ -85,10 +85,61 @@ df.random.<distribution>(<params>, seed=None, name=None)
 | `np.random.normal(mean, std, size=n)`    | `pr.normal(mean=mean, std=std, size=n)`                             |
 | `np.random.binomial(n, p, size=size)`    | `pr.binomial(n=n, p=p, size=size)`                                  |
 | `np.random.randint(low, high, size=n)`   | `pr.randint(low=low, high=high, size=n)`                            |
-| `np.random.seed(42)` (global)            | `seed=42` per call                                                  |
+| `np.random.seed(42)` (global)            | `pr.set_random_seed(42)` (global) &nbsp;or&nbsp; `seed=42` per call  |
 | Different params per row (loop / vectorize manually) | Pass a column name or `pl.col(...)` as the parameter      |
 
 When used as a DataFrame/LazyFrame method or via the `pl.col(...).random` namespace, the output length is taken from the parent — no `size=` needed. Use `size=N` only with the top-level functions for "give me N values without a frame."
+
+## Seeding & reproducibility
+
+Every draw takes an optional `seed=`. There are two ways to make results reproducible:
+
+**Per call** — pass `seed=` to a single expression:
+
+```python
+pr.normal(mean=0.0, std=1.0, seed=42)
+```
+
+**Globally** — set one seed once with `pr.set_random_seed(...)`. Any draw that omits `seed=` then derives its seed from this global generator:
+
+```python
+import polars as pl
+import polars_random as pr
+
+pr.set_random_seed(42)
+
+df = pl.DataFrame({"id": range(5)})
+df.with_columns(
+    a=pr.normal(),               # reproducible — no per-call seed needed
+    b=pr.rand(),                 # independent of `a`, also reproducible
+)
+```
+
+This solves the "keep the distribution definition separate from where I set the seed" workflow: define length-free expressions (`pr.normal(3.0, 1.0)`) and let one global seed make the whole run reproducible, without threading `seed=42` through every call.
+
+Semantics:
+
+- **Each expression consumes the global generator once**, so distinct random columns in the same query stay independent (they are *not* byte-for-byte identical), just like NumPy's global RNG or `polars`' own `set_random_seed`.
+- **Re-calling `pr.set_random_seed(42)`** rewinds the sequence, so a script re-run reproduces the same draws.
+- **An explicit `seed=`** on a call always overrides the global seed for that call.
+- **Without any global seed**, seedless draws use OS entropy (the historical default) — nothing changes for existing code.
+
+### Want two *identical* columns?
+
+Seedless draws under a global seed are always independent (that is the point), so they never coincide. To make two columns equal, give them the **same explicit `seed=`** — that pins both to the same draw and bypasses the global generator:
+
+```python
+df.with_columns(
+    a=pr.normal(seed=7),
+    b=pr.normal(seed=7),   # a == b, byte-for-byte
+)
+```
+
+### Reproducibility depends on call order
+
+Under a global seed, each seedless draw takes the *next* value from the generator, so reproducibility depends on the **order and number** of seedless draws — the same sequence of calls reproduces the same columns. Inserting or reordering a seedless draw shifts every later one (exactly like NumPy's or Polars' global RNG). If a specific column must stay fixed regardless of surrounding code, pin it with an explicit `seed=`.
+
+> `pr.set_random_seed` is independent of `polars.set_random_seed`. Polars seeds its *own* operations (`.sample()`, `.shuffle()`, …) and exposes only a setter — there is no public way for a plugin to read Polars' seed — so `polars-random` keeps its own global seed. Set both if you want Polars *and* `polars-random` reproducible in the same script.
 
 ## Distributions
 

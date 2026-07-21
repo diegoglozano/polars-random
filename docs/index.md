@@ -45,7 +45,7 @@ Available distributions: `rand` / `uniform`, `normal`, `binomial`, `randint`. Ev
 
 - **Polars-native** — outputs are regular Polars columns, composable with the rest of your pipeline (no NumPy round-trips).
 - **Per-row parameters** — `mean`, `std`, `low`, `high`, `n`, `p` can come from other columns, so each row can be drawn from a different distribution.
-- **Reproducible** — pass `seed=...` for deterministic draws.
+- **Reproducible** — pass `seed=...` per call, or set one global seed with `pr.set_random_seed(...)`.
 - **Fast** — implemented in Rust on top of `rand` / `rand_distr`.
 
 ## Installation
@@ -74,7 +74,7 @@ Every distribution is a single underlying Rust kernel exposed in four ways:
 | `df.random.<dist>(...)` / `lf.random.<dist>(...)` | `pl.DataFrame` / `pl.LazyFrame` (column appended) |
 
 - Each parameter accepts **a Python literal**, **a column name as a string**, or **a Polars expression** (`pl.col(...)`, arithmetic, etc.). Within a single call, the distribution's parameters must be the same kind — either all literals or all expressions/column-names (no mixing).
-- `seed` makes the draw reproducible. Omit it for entropy-based randomness.
+- `seed` makes the draw reproducible. Omit it for entropy-based randomness, or set one global seed for the whole session with `pr.set_random_seed(...)` (see [Global seed](api_reference.md#global-seed)).
 - For DataFrame/LazyFrame methods, `name` is the new column's name. Defaults to the distribution name (`"rand"`, `"normal"`, `"binomial"`, `"randint"`).
 - Nulls in column-valued parameters become null in the output.
 
@@ -86,7 +86,7 @@ Every distribution is a single underlying Rust kernel exposed in four ways:
 | `np.random.normal(mean, std, size=n)`    | `pr.normal(mean=mean, std=std, size=n)`                             |
 | `np.random.binomial(n, p, size=size)`    | `pr.binomial(n=n, p=p, size=size)`                                  |
 | `np.random.randint(low, high, size=n)`   | `pr.randint(low=low, high=high, size=n)`                            |
-| `np.random.seed(42)` (global)            | `seed=42` per call                                                  |
+| `np.random.seed(42)` (global)            | `pr.set_random_seed(42)` (global) &nbsp;or&nbsp; `seed=42` per call  |
 | Different params per row (loop / vectorize manually) | Pass a column name or `pl.col(...)` as the parameter      |
 
 When used as a DataFrame/LazyFrame method or via the `pl.col(...).random` namespace, the output length is taken from the parent — no `size=` needed. Use `size=N` only with the top-level functions for "give me N values without a frame."
