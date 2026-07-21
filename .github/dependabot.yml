@@ -5,19 +5,16 @@ updates:
     schedule:
       interval: daily
     labels:
-    - skip-changelog
     - dependencies
   - package-ecosystem: cargo
     directory: "/"
     schedule:
       interval: daily
     labels:
-    - skip-changelog
     - dependencies
   - package-ecosystem: github-actions
     directory: '/'
     schedule:
       interval: daily
     labels:
-    - skip-changelog
     - dependencies
