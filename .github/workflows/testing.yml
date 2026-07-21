@@ -68,8 +68,10 @@ jobs:
         name: wheel-${{ matrix.os }}
         path: dist/*.whl
         if-no-files-found: error
+  # Linting needs no compiled extension: ruff is import-free and ty resolves
+  # polars_random._internal from its committed _internal.pyi stub. So this job
+  # stays independent of `build` and never touches Rust.
   python-linting:
-    needs: build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
@@ -81,15 +83,8 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-    - name: Download prebuilt wheel
-      uses: actions/download-artifact@v4
-      with:
-        name: wheel-ubuntu-latest
-        path: dist
     - name: Install Dependencies
-      run: |
-        uv sync --frozen --no-install-project
-        uv pip install --no-index --no-deps --find-links dist polars-random
+      run: uv sync --frozen --no-install-project
     - name: Ruff format check
       run: uv run --no-sync ruff format polars_random tests --check
     - name: Lint with ruff
@@ -120,8 +115,18 @@ jobs:
         name: wheel-${{ matrix.os }}
         path: dist
     - name: Install Dependencies
-      run: |
-        uv sync --frozen --no-install-project
-        uv pip install --no-index --no-deps --find-links dist polars-random
+      run: uv sync --frozen --no-install-project
+    - name: Install prebuilt extension into source tree
+      # Drop the compiled _internal module next to the Python sources, exactly
+      # as an editable/`maturin develop` install would, so `import
+      # polars_random` picks up the extension instead of failing on the
+      # uncompiled source checkout.
+      run: >-
+        uv run --no-sync python -c "import glob, zipfile;
+        w = glob.glob('dist/*.whl')[0];
+        z = zipfile.ZipFile(w);
+        m = [n for n in z.namelist() if n.startswith('polars_random/_internal') and (n.endswith('.so') or n.endswith('.pyd'))];
+        z.extractall('.', m);
+        print('extracted', m)"
     - name: Test with pytest
       run: uv run --no-sync pytest
