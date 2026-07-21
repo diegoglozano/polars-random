@@ -15,9 +15,11 @@ categories:
   - title: '⚠ Breaking changes'
     label: 'breaking-change'
   - title: 'Features'
-    labels: 'enhancement'
+    labels:
+      - 'enhancement'
   - title: 'Bug Fixes'
-    labels: 'bug'
+    labels:
+      - 'bug'
 change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
 template: |
   ## Changes
