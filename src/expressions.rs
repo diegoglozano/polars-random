@@ -41,7 +41,7 @@ struct SeedArgs {
 fn make_rng(seed: Option<u64>) -> SmallRng {
     match seed {
         Some(i) => SmallRng::seed_from_u64(i),
-        None => SmallRng::from_os_rng(),
+        None => rand::make_rng(),
     }
 }
 
