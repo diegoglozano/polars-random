@@ -3,6 +3,15 @@ import pytest
 
 import polars_random as pr  # noqa: F401  (also registers namespaces)
 
+
+@pytest.fixture(autouse=True)
+def _reset_global_seed():
+    """Keep the module-global seed from leaking between tests."""
+    pr._GLOBAL_RNG = None
+    yield
+    pr._GLOBAL_RNG = None
+
+
 # ---------------- DataFrame namespace (existing) ----------------
 
 
@@ -194,3 +203,70 @@ def test_per_row_normal_via_expr():
     df = pl.DataFrame({"m": [0.0] * 10, "s": [1.0] * 10})
     out = df.with_columns(n=pl.col("m").random.normal(mean=pl.col("m"), std=pl.col("s"), seed=42))
     assert out["n"].len() == 10
+
+
+# ---------------- Global seed (new) ----------------
+
+
+def test_global_seed_makes_seedless_reproducible():
+    df = pl.DataFrame({"x": range(100)})
+    pr.set_random_seed(42)
+    a = df.with_columns(r=pr.normal()).get_column("r").to_list()
+    pr.set_random_seed(42)
+    b = df.with_columns(r=pr.normal()).get_column("r").to_list()
+    assert a == b
+
+
+def test_global_seed_distinct_expressions_are_independent():
+    # Two seedless draws in the same query consume the global generator
+    # separately, so they must not be byte-for-byte identical.
+    df = pl.DataFrame({"x": range(1_000)})
+    pr.set_random_seed(42)
+    out = df.with_columns(a=pr.normal(), b=pr.normal())
+    assert out["a"].to_list() != out["b"].to_list()
+
+
+def test_explicit_seed_overrides_global():
+    df = pl.DataFrame({"x": range(100)})
+    pr.set_random_seed(42)
+    with_global = df.with_columns(r=pr.rand()).get_column("r").to_list()
+    explicit = df.with_columns(r=pr.rand(seed=123)).get_column("r").to_list()
+    reference = df.with_columns(r=pr.rand(seed=123)).get_column("r").to_list()
+    assert explicit == reference
+    assert explicit != with_global
+
+
+def test_global_seed_applies_across_entry_points():
+    # Top-level size=, expr namespace, df namespace and lazy all honor it.
+    pr.set_random_seed(7)
+    top = pr.rand(size=50).to_list()
+    pr.set_random_seed(7)
+    expr = (
+        pl.DataFrame({"x": range(50)})
+        .with_columns(r=pl.col("x").random.rand())
+        .get_column("r")
+        .to_list()
+    )
+    pr.set_random_seed(7)
+    lazy = (
+        pl.DataFrame({"x": range(50)})
+        .lazy()
+        .random.rand(name="r")
+        .collect()
+        .get_column("r")
+        .to_list()
+    )
+    assert top == expr == lazy
+
+
+def test_set_random_seed_negative_raises():
+    with pytest.raises(ValueError, match="non-negative"):
+        pr.set_random_seed(-1)
+
+
+def test_no_global_seed_leaves_entropy_default():
+    # Without a global seed, seedless draws stay entropy-based (independent).
+    df = pl.DataFrame({"x": range(1_000)})
+    a = df.with_columns(r=pr.rand()).get_column("r").to_list()
+    b = df.with_columns(r=pr.rand()).get_column("r").to_list()
+    assert a != b

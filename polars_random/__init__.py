@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random as _random
 from pathlib import Path
 from typing import Union
 
@@ -13,6 +14,7 @@ __all__ = [
     "normal",
     "rand",
     "randint",
+    "set_random_seed",
     "uniform",
 ]
 
@@ -20,6 +22,70 @@ LIB = Path(__file__).parent
 
 FloatParam = Union[float, int, pl.Expr, str, None]
 IntParam = Union[int, pl.Expr, str, None]
+
+# Module-global generator used to derive per-expression seeds when the caller
+# does not pass an explicit ``seed=``. ``None`` means "no global seed set", in
+# which case draws fall back to OS entropy (the historical default).
+_GLOBAL_RNG: _random.Random | None = None
+# Width of the derived seeds fed to the Rust kernel. 63 bits keeps the value
+# inside both u64 and i64 ranges (robust to kwargs serialization) while leaving
+# ample seed entropy.
+_SEED_BITS = 63
+
+
+def set_random_seed(seed: int) -> None:
+    """
+    Set a global default seed for all ``polars-random`` draws.
+
+    Once set, any ``polars-random`` expression that does **not** pass an
+    explicit ``seed=`` derives its seed from this global generator. Each
+    expression consumes the generator, so distinct random columns in the same
+    query stay independent (not byte-for-byte identical) while the whole run
+    remains reproducible. Re-calling ``set_random_seed`` with the same value
+    rewinds the sequence, reproducing the same draws.
+
+    An explicit ``seed=`` on an individual call always overrides the global
+    seed for that call.
+
+    This is independent of :func:`polars.set_random_seed`, which seeds Polars'
+    own operations (``.sample()``, ``.shuffle()``, …) and is not readable by
+    third-party plugins.
+
+    Parameters
+    ----------
+    seed : int
+        A non-negative integer used to seed the internal global generator.
+
+    Examples
+    --------
+    >>> import polars as pl
+    >>> import polars_random as pr
+    >>> pr.set_random_seed(42)
+    >>> df = pl.DataFrame({"id": range(3)})
+    >>> a = df.with_columns(x=pr.normal())  # reproducible without seed=
+    >>> pr.set_random_seed(42)
+    >>> b = df.with_columns(x=pr.normal())
+    >>> a.equals(b)
+    True
+    """
+    if seed is None or seed < 0:
+        raise ValueError("Seed must be a non-negative integer")
+    global _GLOBAL_RNG
+    _GLOBAL_RNG = _random.Random(seed)
+
+
+def _resolve_seed(seed: int | None) -> int | None:
+    """Return the effective seed for a single draw.
+
+    An explicit ``seed`` wins. Otherwise, if a global seed has been set, draw
+    the next seed from the global generator (advancing it). If no global seed
+    is set, return ``None`` so the kernel uses OS entropy.
+    """
+    if seed is not None:
+        return seed
+    if _GLOBAL_RNG is None:
+        return None
+    return _GLOBAL_RNG.getrandbits(_SEED_BITS)
 
 
 def _check_seed(seed: int | None) -> None:
@@ -66,6 +132,7 @@ def _rand_expr(
 ) -> pl.Expr:
     _check_seed(seed)
     _consistent_pair(low, high, ("low", "high"))
+    seed = _resolve_seed(seed)
 
     if _is_columnar(low):
         return register_plugin_function(
@@ -92,6 +159,7 @@ def _normal_expr(
 ) -> pl.Expr:
     _check_seed(seed)
     _consistent_pair(mean, std, ("mean", "std"))
+    seed = _resolve_seed(seed)
 
     if _is_columnar(mean):
         return register_plugin_function(
@@ -120,6 +188,7 @@ def _binomial_expr(
     _consistent_pair(n, p, ("n", "p"))
     if isinstance(p, (int, float)):
         _check_probability(float(p))
+    seed = _resolve_seed(seed)
 
     if _is_columnar(n):
         return register_plugin_function(
@@ -146,6 +215,7 @@ def _randint_expr(
 ) -> pl.Expr:
     _check_seed(seed)
     _consistent_pair(low, high, ("low", "high"))
+    seed = _resolve_seed(seed)
 
     if _is_columnar(low):
         return register_plugin_function(

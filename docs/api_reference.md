@@ -21,6 +21,28 @@ Returns a `pl.Expr` by default, or a `pl.Series` of length `size` when `size=` i
 ::: polars_random.randint
     handler: python
 
+## Global seed
+
+Set one seed for the whole session. Any draw that omits `seed=` then derives its
+seed from this global generator; an explicit `seed=` on a call still overrides it.
+Distinct expressions consume the generator separately, so they stay independent
+while remaining reproducible across re-runs.
+
+```python
+import polars as pl
+import polars_random as pr
+
+pr.set_random_seed(42)
+df = pl.DataFrame({"id": range(5)})
+df.with_columns(a=pr.normal(), b=pr.rand())  # reproducible, no per-call seed
+```
+
+`pr.set_random_seed` is independent of `polars.set_random_seed` (which seeds
+Polars' own `.sample()` / `.shuffle()` and is not readable by plugins).
+
+::: polars_random.set_random_seed
+    handler: python
+
 ## `pl.col(...).random` — expression namespace
 
 Use inside any expression context (`select`, `with_columns`, lazy queries, group-by aggregations, …). The parent expression provides the row count.
