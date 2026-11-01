@@ -56,6 +56,9 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
+      with:
+        # Existing caches contain linker paths from actions/setup-python.
+        key: uv-python-${{ env.PYTHON_VERSION }}
     - name: Build abi3 wheel
       # Refresh cached PyO3 linker settings against the uv environment.
       env:
