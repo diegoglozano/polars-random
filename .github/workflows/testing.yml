@@ -57,9 +57,11 @@ jobs:
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
     - name: Build abi3 wheel
+      # Select the uv interpreter explicitly so cached PyO3 configuration is
+      # refreshed instead of linking against the former setup-python install.
       run: |
         uv sync --frozen --no-install-project
-        uv run --no-sync maturin build --out dist
+        uv run --no-sync maturin build --out dist --interpreter python
     - name: Upload wheel
       uses: actions/upload-artifact@v7
       with:
