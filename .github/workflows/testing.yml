@@ -48,17 +48,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v7
-    - name: Install uv
+    # uv supplies portable Python builds, including 3.9 on Ubuntu 26.04.
+    - name: Install uv and Python
       uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
-    - name: Set up Python
-      uses: actions/setup-python@v7
-      with:
         python-version: ${{ env.PYTHON_VERSION }}
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
+      with:
+        # Existing caches contain linker paths from actions/setup-python.
+        key: uv-python-${{ env.PYTHON_VERSION }}
     - name: Build abi3 wheel
+      # Refresh cached PyO3 linker settings against the uv environment.
+      env:
+        PYO3_PYTHON: python
       run: |
         uv sync --frozen --no-install-project
         uv run --no-sync maturin build --out dist
@@ -75,13 +79,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
-    - name: Install uv
+    - name: Install uv and Python
       uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
-    - name: Set up Python
-      uses: actions/setup-python@v7
-      with:
         python-version: ${{ env.PYTHON_VERSION }}
     - name: Install Dependencies
       run: uv sync --frozen --no-install-project
@@ -101,13 +102,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v7
-    - name: Install uv
+    - name: Install uv and Python ${{ matrix.python-version }}
       uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v7
-      with:
         python-version: ${{ matrix.python-version }}
     - name: Download prebuilt wheel
       uses: actions/download-artifact@v8
