@@ -1,12 +1,7 @@
-import sys
+import tomllib
 from pathlib import Path
 
 from polars_random import __version__ as VERSION
-
-if sys.version_info < (3, 11):
-    import tomli as tomllib  # ty: ignore[unresolved-import]
-else:
-    import tomllib
 
 
 def test_versions_match():

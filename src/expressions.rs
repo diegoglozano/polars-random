@@ -66,13 +66,10 @@ fn rand_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
     let high = inputs[1].f64()?;
     let mut rng = make_rng(kwargs.seed);
 
-    let out = low
-        .into_iter()
-        .zip(high.into_iter())
-        .map(|(l, h)| match (l, h) {
-            (Some(l), Some(h)) => Uniform::new(l, h).ok().map(|u| u.sample(&mut rng)),
-            _ => None,
-        });
+    let out = low.iter().zip(high.iter()).map(|(l, h)| match (l, h) {
+        (Some(l), Some(h)) => Uniform::new(l, h).ok().map(|u| u.sample(&mut rng)),
+        _ => None,
+    });
     Ok(Float64Chunked::from_iter_options(low.name().clone(), out).into_series())
 }
 
@@ -99,13 +96,10 @@ fn normal_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
     let std = inputs[1].f64()?;
     let mut rng = make_rng(kwargs.seed);
 
-    let out = mean
-        .into_iter()
-        .zip(std.into_iter())
-        .map(|(m, s)| match (m, s) {
-            (Some(m), Some(s)) => Normal::new(m, s).ok().map(|n| n.sample(&mut rng)),
-            _ => None,
-        });
+    let out = mean.iter().zip(std.iter()).map(|(m, s)| match (m, s) {
+        (Some(m), Some(s)) => Normal::new(m, s).ok().map(|n| n.sample(&mut rng)),
+        _ => None,
+    });
     Ok(Float64Chunked::from_iter_options(mean.name().clone(), out).into_series())
 }
 
@@ -130,13 +124,10 @@ fn binomial_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
     let p = inputs[1].f64()?;
     let mut rng = make_rng(kwargs.seed);
 
-    let out = n
-        .into_iter()
-        .zip(p.into_iter())
-        .map(|(n_, p_)| match (n_, p_) {
-            (Some(n_), Some(p_)) => Binomial::new(n_, p_).ok().map(|b| b.sample(&mut rng)),
-            _ => None,
-        });
+    let out = n.iter().zip(p.iter()).map(|(n_, p_)| match (n_, p_) {
+        (Some(n_), Some(p_)) => Binomial::new(n_, p_).ok().map(|b| b.sample(&mut rng)),
+        _ => None,
+    });
     Ok(UInt64Chunked::from_iter_options(n.name().clone(), out).into_series())
 }
 
@@ -161,12 +152,9 @@ fn randint_expr(inputs: &[Series], kwargs: SeedArgs) -> PolarsResult<Series> {
     let high = inputs[1].i64()?;
     let mut rng = make_rng(kwargs.seed);
 
-    let out = low
-        .into_iter()
-        .zip(high.into_iter())
-        .map(|(l, h)| match (l, h) {
-            (Some(l), Some(h)) => Uniform::new(l, h).ok().map(|u| u.sample(&mut rng)),
-            _ => None,
-        });
+    let out = low.iter().zip(high.iter()).map(|(l, h)| match (l, h) {
+        (Some(l), Some(h)) => Uniform::new(l, h).ok().map(|u| u.sample(&mut rng)),
+        _ => None,
+    });
     Ok(Int64Chunked::from_iter_options(low.name().clone(), out).into_series())
 }

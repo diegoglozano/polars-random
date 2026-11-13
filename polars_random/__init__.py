@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import random as _random
 from pathlib import Path
-from typing import Union
 
 import polars as pl
 from polars.plugins import register_plugin_function
@@ -20,8 +19,8 @@ __all__ = [
 
 LIB = Path(__file__).parent
 
-FloatParam = Union[float, int, pl.Expr, str, None]
-IntParam = Union[int, pl.Expr, str, None]
+FloatParam = float | int | pl.Expr | str | None
+IntParam = int | pl.Expr | str | None
 
 # Module-global generator used to derive per-expression seeds when the caller
 # does not pass an explicit ``seed=``. ``None`` means "no global seed set", in
@@ -128,6 +127,11 @@ def _consistent_pair(a: object, b: object, names: tuple[str, str]) -> None:
         )
 
 
+# Each kernel consumes a stateful RNG sequence over its full input. Marking
+# it elementwise lets Polars restart that sequence in parallel/streaming chunks.
+# Entropy-based draws are also nondeterministic, so Polars must not merge them
+# during common subexpression elimination. Explicit/global seeds are resolved
+# before registration and make the expression deterministic.
 def _rand_expr(
     low: FloatParam = None,
     high: FloatParam = None,
@@ -143,14 +147,16 @@ def _rand_expr(
             args=[_to_expr(low, pl.Float64), _to_expr(high, pl.Float64)],
             plugin_path=LIB,
             function_name="rand_expr",
-            is_elementwise=True,
+            is_elementwise=False,
+            is_deterministic=seed is not None,
             kwargs={"seed": seed},
         )
     return register_plugin_function(
         args=[_length_anchor(over)],
         plugin_path=LIB,
         function_name="rand",
-        is_elementwise=True,
+        is_elementwise=False,
+        is_deterministic=seed is not None,
         kwargs={"low": low, "high": high, "seed": seed},
     )
 
@@ -170,14 +176,16 @@ def _normal_expr(
             args=[_to_expr(mean, pl.Float64), _to_expr(std, pl.Float64)],
             plugin_path=LIB,
             function_name="normal_expr",
-            is_elementwise=True,
+            is_elementwise=False,
+            is_deterministic=seed is not None,
             kwargs={"seed": seed},
         )
     return register_plugin_function(
         args=[_length_anchor(over)],
         plugin_path=LIB,
         function_name="normal",
-        is_elementwise=True,
+        is_elementwise=False,
+        is_deterministic=seed is not None,
         kwargs={"mean": mean, "std": std, "seed": seed},
     )
 
@@ -199,14 +207,16 @@ def _binomial_expr(
             args=[_to_expr(n, pl.UInt64), _to_expr(p, pl.Float64)],
             plugin_path=LIB,
             function_name="binomial_expr",
-            is_elementwise=True,
+            is_elementwise=False,
+            is_deterministic=seed is not None,
             kwargs={"seed": seed},
         )
     return register_plugin_function(
         args=[_length_anchor(over)],
         plugin_path=LIB,
         function_name="binomial",
-        is_elementwise=True,
+        is_elementwise=False,
+        is_deterministic=seed is not None,
         kwargs={"n": n, "p": p, "seed": seed},
     )
 
@@ -226,14 +236,16 @@ def _randint_expr(
             args=[_to_expr(low, pl.Int64), _to_expr(high, pl.Int64)],
             plugin_path=LIB,
             function_name="randint_expr",
-            is_elementwise=True,
+            is_elementwise=False,
+            is_deterministic=seed is not None,
             kwargs={"seed": seed},
         )
     return register_plugin_function(
         args=[_length_anchor(over)],
         plugin_path=LIB,
         function_name="randint",
-        is_elementwise=True,
+        is_elementwise=False,
+        is_deterministic=seed is not None,
         kwargs={"low": low, "high": high, "seed": seed},
     )
 

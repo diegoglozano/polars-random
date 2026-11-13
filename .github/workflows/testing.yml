@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   RUSTFLAGS: "-D warnings"
-  PYTHON_VERSION: "3.9"
+  PYTHON_VERSION: "3.11"
 jobs:
   clippy:
     name: Clippy
@@ -37,7 +37,7 @@ jobs:
     - name: Run cargo fmt
       run: cargo fmt --all -- --check
   # Build the compiled extension once per OS. Because the crate targets pyo3's
-  # stable ABI (abi3-py39), a single wheel works across every supported Python
+  # stable ABI (abi3-py311), a single wheel works across every supported Python
   # version, so there is no reason to recompile Rust per Python version.
   build:
     name: Build wheel
@@ -61,7 +61,7 @@ jobs:
     - name: Build abi3 wheel
       run: |
         uv sync --frozen --no-install-project
-        uv run --no-sync maturin build --out dist
+        uv run --no-sync maturin build --locked --out dist
     - name: Upload wheel
       uses: actions/upload-artifact@v7
       with:
@@ -96,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:

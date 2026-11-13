@@ -11,9 +11,9 @@ authors = [
 license = { file = "LICENSE" }
 readme = "README.md"
 dynamic = ["version"]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
-    "polars>=1.0.0",
+    "polars>=2.1.0,<3.0.0",
 ]
 keywords = [
     "polars",
@@ -37,11 +37,10 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Rust",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Mathematics",
@@ -92,7 +91,7 @@ exclude_lines = ["if __name__ == .__main__.:", "pragma: no cover"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py311"
 fix = true
 
 [tool.ruff.lint]

@@ -50,6 +50,8 @@ Available distributions: `rand` / `uniform`, `normal`, `binomial`, `randint`. Ev
 
 ## Installation
 
+Requires Python 3.11+ and Polars 2.1+. For older Python or Polars versions, use `polars-random<0.6`.
+
 ```sh
 uv add polars-random
 ```
@@ -90,6 +92,17 @@ Every distribution is a single underlying Rust kernel exposed in four ways:
 | Different params per row (loop / vectorize manually) | Pass a column name or `pl.col(...)` as the parameter      |
 
 When used as a DataFrame/LazyFrame method or via the `pl.col(...).random` namespace, the output length is taken from the parent — no `size=` needed. Use `size=N` only with the top-level functions for "give me N values without a frame."
+
+### Chunking and execution engines
+
+Each random expression generates one continuous sequence over its full input.
+With the same seed and ordered inputs, eager evaluation, lazy in-memory
+evaluation, and `collect(engine="streaming")` produce the same draws, regardless
+of input chunk boundaries. Null column parameters still produce null outputs.
+
+Random expressions require the full input in memory, even in streaming queries.
+Polars can stream the surrounding query, but random generation is evaluated as
+a whole-column operation to preserve the RNG sequence.
 
 ## Distributions
 

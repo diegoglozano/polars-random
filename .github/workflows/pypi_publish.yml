@@ -10,7 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [x86_64, x86, aarch64, armv7, ppc64le]
+        # Match the Linux architectures with Polars 2.1 runtime wheels.
+        target: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -20,7 +21,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --locked --release --out dist --find-interpreter
           sccache: 'true'
           manylinux: auto
       - name: Upload wheels
@@ -32,7 +33,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        target: [x64, x86]
+        target: [x64]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -43,7 +44,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --locked --release --out dist --find-interpreter
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v7
@@ -64,7 +65,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          args: --locked --release --out dist --find-interpreter
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v7

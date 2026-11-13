@@ -15,10 +15,9 @@ Optional flags::
     --json benchmarks/results.json              # raw timings for downstream tooling
 
 The script is deterministic: every distribution is drawn with ``seed=42`` and the
-same ``size`` argument so successive runs are timing-noise only. Note that the
-streaming engine processes data in chunks and re-applies the seed per chunk, so
-its output sequence differs from the in-memory engine even at the same seed —
-both are reproducible, just not bit-identical to each other.
+same ``size`` argument so successive runs are timing-noise only. Random draws
+use a continuous sequence over the full input, including when the query uses
+the streaming engine. Seeded results match across execution engines.
 
 Scenarios per distribution / size:
 
@@ -48,6 +47,7 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
+from polars.testing import assert_series_equal
 
 import polars_random as pr
 
@@ -266,6 +266,11 @@ def main() -> int:
     )
     results: list[Case] = []
     for distribution, scenario, size, fn in cases:
+        if scenario == "polars_random eager":
+            reference = fn()
+        elif scenario.startswith("polars_random"):
+            actual = fn().get_column(distribution)
+            assert_series_equal(actual, reference, check_names=False)
         case = Case(distribution=distribution, scenario=scenario, size=size)
         case.times = time_callable(fn, repeats=args.repeats, inner=args.inner)
         results.append(case)
